@@ -5,7 +5,7 @@ baseurl:
 url: https://zhengjian526.github.io/left-handed_knife/
 date_format: "ordinal"
 title: 左手刀
-subtitle: "每天学一点正经的编码知识"
+subtitle: "每天学一点正经的编程知识"
 description: "zhengjian的个人博客"
 keywords: 嵌入式程序员，深度学习推理框架
 timezone: Asia/Shenzhen

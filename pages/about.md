@@ -1,13 +1,13 @@
 ---
 layout: page
 title: About
-description: 打码改变世界
-keywords: Zhuang Ma, 马壮
+description: 每天学一点正经的编程知识
+keywords: zhengjian526
 comments: true
 menu: 关于
 permalink: /about/
 ---
-111111
+蝉噪林逾静, 鸟鸣山更幽
 
 ## 联系
 
