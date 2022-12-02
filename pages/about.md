@@ -7,7 +7,7 @@ comments: true
 menu: 关于
 permalink: /about/
 ---
-蝉噪林逾静, 鸟鸣山更幽
+**蝉噪林逾静, 鸟鸣山更幽**
 
 ## 联系
 
