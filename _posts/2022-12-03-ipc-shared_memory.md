@@ -115,6 +115,275 @@ void SharedMemory::Destroy()
 
 ## POSIX 接口使用
 
+```c++
+// shared_memory.h
+struct SharedMemory {
+  std::string memory_key;
+  uint64_t bytes_size = 0;
+  uint8_t *address = nullptr;
+  // std::set<uint64_t> free_queue;
+};
+
+struct SharedMemoryGroup {
+  std::unordered_map<std::string, std::shared_ptr<SharedMemory>> shm_map_;
+  std::queue<std::string> free_queue_;
+};
+
+class SharedMemoryAllocator {
+ public:
+  static SharedMemoryAllocator &Instance();
+  SharedMemoryAllocator();
+  ~SharedMemoryAllocator();
+  int NewMemoryBuffer(uint64_t item_size, uint64_t init_item_count);
+  std::string AllocMemory(uint64_t mem_size);
+  int ReleaseMemory(const std::string &memory_key);
+  void MemPoolInfo();
+ private:
+  std::string GetRandFileName(const std::string prefix);
+  int AddShmMemoryBuffer(std::shared_ptr<SharedMemoryGroup>& shm_group, uint64_t item_size);
+ private:
+  
+  std::mutex lock_;
+  std::map<int64_t, std::shared_ptr<SharedMemoryGroup>> size_group_map_;
+};
+
+struct SharedMemoryAttach {
+  std::string memory_key;
+  uint64_t bytes_size = 0;
+  uint8_t *address = nullptr;
+};
+class SharedMemoryManager {
+ public:
+  static SharedMemoryManager &Instance();
+  SharedMemoryManager();
+  ~SharedMemoryManager();
+  std::shared_ptr<SharedMemoryAttach> Attach(const std::string &memory_key, uint64_t bytes_size);
+  int Detach(const std::string &memory_key);
+ private:
+  std::vector<std::shared_ptr<SharedMemoryAttach>> attached_shm_list_;
+  std::mutex lock_;
+};
+
+```
+
+```c++
+// shared_memory.cpp
+std::atomic<uint64_t> shared_mem_counter{0};
+SharedMemoryAllocator &SharedMemoryAllocator::Instance() 
+{
+  static SharedMemoryAllocator instance;
+  return instance;
+}
+SharedMemoryAllocator::SharedMemoryAllocator() = default;
+
+SharedMemoryAllocator::~SharedMemoryAllocator() 
+{
+    std::unique_lock<std::mutex> lock(lock_);
+    for(auto& group : size_group_map_) {
+        auto& shm_map_ = group.second->shm_map_;
+        for(auto& item: shm_map_) { 
+            auto ret = munmap(item.second->address, item.second->bytes_size);
+            if (ret == -1) {
+                std::cout << "Failed to munmap, memory key: " << item.second->memory_key << std::endl;
+            }
+            ret = shm_unlink(item.second->memory_key.c_str());
+            if (ret == -1) {
+                std::cout << "Failed to shm_unlink " << item.second->memory_key 
+                        << ", errno: " << errno << std::endl;
+            }
+        }
+        shm_map_.clear();
+    }
+    size_group_map_.clear();
+      std::cout << "SharedMemoryAllocator destroy" <<std::endl; 
+}
+std::string SharedMemoryAllocator::GetRandFileName(const std::string prefix)
+{
+    std::string ret = prefix + std::to_string(getpid()) + "_"  + std::to_string(shared_mem_counter);
+    if(shared_mem_counter != std::numeric_limits<uint64_t>::max()) {
+        shared_mem_counter++;
+    }
+    else {
+        shared_mem_counter = 0;
+    }
+    return ret;
+}
+int SharedMemoryAllocator::AddShmMemoryBuffer(std::shared_ptr<SharedMemoryGroup>& shm_group, uint64_t item_size) {
+    const auto memory_key = GetRandFileName("xxx_");
+    if(shm_group->shm_map_.find(memory_key) != shm_group->shm_map_.end()) {
+        std::cout << "Shared memory key : "<< memory_key << " has already been inited" << std::endl;
+    }
+    // auto shm_fd = shm_open(memory_key.c_str(), O_CREAT | O_RDWR, S_IRUSR | S_IWUSR);
+    mode_t old_umask = umask(0);
+    // shm_open 需要在创建是指定权限, 另外需要清楚umask, 避免屏蔽掉部分权限
+    auto shm_fd = shm_open(memory_key.c_str(), O_CREAT | O_RDWR, S_IRWXU | S_IRWXG | S_IRWXO);
+    umask(old_umask);
+    if (shm_fd == -1) {
+        std::cout << "Failed to shm_open " << memory_key << " , errno: " << errno << std::endl;
+        return -1;
+    }
+    auto ret = ftruncate(shm_fd, item_size);
+    if (ret == -1) {
+        std::cout << "Failed to ftruncate " << memory_key << ", errno: " << errno 
+                    << ", memory size: " << item_size << std::endl;
+        return -1;
+    }
+    auto address = mmap(nullptr, item_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    if (address == MAP_FAILED) {
+        std::cout << "Failed to mmap " << memory_key << ", errno: " << errno 
+                    << ", memory size: " << item_size << std::endl;
+        return -1;
+    }
+    ret = close(shm_fd);
+    std::shared_ptr<SharedMemory> shared_mem = std::make_shared<SharedMemory>();
+    shared_mem->memory_key = memory_key;
+    shared_mem->bytes_size = item_size;
+    shared_mem->address = reinterpret_cast<uint8_t *>(address);
+    shm_group->shm_map_[memory_key] = std::move(shared_mem);
+    shm_group->free_queue_.push(memory_key);
+    return 0;
+}
+int SharedMemoryAllocator::NewMemoryBuffer(uint64_t item_size, uint64_t item_count) 
+{
+    std::unique_lock<std::mutex> lock(lock_);
+    if(size_group_map_.find(item_size) == size_group_map_.end()){
+        size_group_map_[item_size] = std::make_shared<SharedMemoryGroup>();
+    }
+    auto& group = size_group_map_[item_size];
+    for (size_t i = 0; i < item_count; i++) {
+        auto ret = AddShmMemoryBuffer(group, item_size);
+        if(ret == -1){
+            std::cout << "Insert shared mem buffer failed. " << std::endl;
+            return -1;
+        }
+    }
+    return 0;
+}
+std::string SharedMemoryAllocator::AllocMemory(uint64_t mem_size)
+{
+    std::unique_lock<std::mutex> lock(lock_);
+    for(auto& group : size_group_map_) {
+        if(group.first < mem_size){
+            continue;
+        }
+        else {
+            if(group.second->free_queue_.empty() == false) {
+                auto ret = group.second->free_queue_.front();
+                group.second->free_queue_.pop();
+                return ret;
+            }
+            else {
+                auto status = AddShmMemoryBuffer(group.second, group.first);
+                if (status == -1) {
+                    std::cout << "Insert shared mem buffer failed. " << std::endl;
+                    return "";
+                }
+                auto ret = group.second->free_queue_.front();
+                group.second->free_queue_.pop();
+                return ret;
+            }
+        }
+    }
+    size_group_map_[mem_size] = std::make_shared<SharedMemoryGroup>();
+    auto& group = size_group_map_[mem_size];
+    auto status = AddShmMemoryBuffer(group, mem_size);
+    if(status == -1){
+        std::cout << "Insert shared mem buffer failed. " << std::endl;
+        return "";
+    }
+    auto ret = group->free_queue_.front();
+    group->free_queue_.pop();
+    return ret;
+}
+int SharedMemoryAllocator::ReleaseMemory(const std::string &memory_key)
+{
+    std::unique_lock<std::mutex> lock(lock_);
+    for (const auto p : size_group_map_) {
+        if(p.second->shm_map_.find(memory_key) != p.second->shm_map_.end()) {
+            p.second->free_queue_.push(memory_key);
+            return 0;
+        }
+    }
+    std::cout << "memory_key: " << memory_key << " is not exist. " << std::endl;
+    return -1;
+}
+void SharedMemoryAllocator::MemPoolInfo()
+{
+    std::ostringstream oss;
+    for (const auto it : size_group_map_) {
+        oss << "mem size: " << std::to_string(it.first) << ", ";
+        oss << "group size: " << it.second->shm_map_.size() << ", ";
+        oss << "free size: " << it.second->free_queue_.size() << "\n";
+    }
+    std::cout << oss.str();
+}
+/**
+ * @brief Shared Memory Manager object
+ * 
+ */
+SharedMemoryManager::SharedMemoryManager() = default;
+SharedMemoryManager::~SharedMemoryManager() {
+  std::unique_lock<std::mutex> lock(lock_);
+  for (auto &item : attached_shm_list_) {
+    auto ret = munmap(item->address, item->bytes_size);
+    if (ret == -1) {
+      std::cout << "Failed to munmap, memory key: " << item->memory_key << std::endl;
+    }
+  }
+  std::cout << "SharedMemoryManager destroy" <<std::endl; 
+  attached_shm_list_.clear();
+}
+
+SharedMemoryManager &SharedMemoryManager::Instance() {
+  static SharedMemoryManager instance;
+  return instance;
+}
+
+std::shared_ptr<SharedMemoryAttach> SharedMemoryManager::Attach(const std::string &memory_key, uint64_t bytes_size) {
+  std::unique_lock<std::mutex> lock(lock_);
+  的mode参数总是需要设置, 如果oflag没有指定了O_CREAT，可以指定为0
+  auto shm_fd = shm_open(memory_key.c_str(), O_RDWR, 0); // open existing object;
+  if (shm_fd == -1) {
+    std::cout << "Failed to shm_open " << memory_key << " , errno: " << errno << std::endl;
+    return nullptr;
+  }
+  auto address = mmap(nullptr, bytes_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+  if (address == MAP_FAILED) {
+    std::cout << "Failed to mmap " << memory_key 
+              << ", errno: " << errno << ", memory size: " << bytes_size << std::endl;
+    return nullptr;
+  }
+  auto ret = close(shm_fd);
+  if (ret == -1) {
+    std::cout << "Failed to close " << memory_key << ", errno: " << errno << std::endl;
+    return nullptr;
+  }
+  std::shared_ptr<SharedMemoryAttach> attach_mem = std::make_shared<SharedMemoryAttach>();
+  attach_mem->memory_key = memory_key;
+  attach_mem->bytes_size = bytes_size;
+  attach_mem->address = static_cast<uint8_t *>(address);
+  attached_shm_list_.push_back(attach_mem);
+  return attach_mem;
+}
+int SharedMemoryManager::Detach(const std::string &memory_key) {
+  std::unique_lock<std::mutex> lock(lock_);
+  auto it = std::find_if(attached_shm_list_.begin(), attached_shm_list_.end(),
+                         [&memory_key](const std::shared_ptr<SharedMemoryAttach> &item) { return memory_key == item->memory_key; });
+  if (it == attached_shm_list_.end()) {
+     std::cout << "Cannot find shared memory " << memory_key << std::endl;
+     return -1;
+  }
+  auto ret = munmap((*it)->address, (*it)->bytes_size);
+  if (ret == -1) {
+    std::cout << "Failed to munmap, memory key: " << memory_key << std::endl;
+    return -1;
+  }
+  attached_shm_list_.erase(it);
+  return 0;
+}
+
+```
+
 
 
 ## 参考
