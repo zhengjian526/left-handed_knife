@@ -105,4 +105,4 @@ git config --global credential.helper 'cache --timeout=600'
 
 ## 参考
 
-- <Pro Git>
+- Pro Git
