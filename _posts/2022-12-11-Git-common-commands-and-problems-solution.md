@@ -152,6 +152,34 @@ ef4725c..3c8d735 slower-blink -> slow-blink
 ④ 修复产生的冲突
 ⑤ 再推送回同一个分支  
 
+#### 基于源仓库创建分支
+
+- 基于上一步创建好的upstream，在本地创建与源分支对应的分支，本地和远程分支名称最好一致
+
+```shell
+git checkout -b cpp20_base upstream/cpp20_base
+```
+
+- 从源仓库拉取分支
+
+```shell
+git pull upstream cpp20_base
+```
+
+- 建立本地分支和远程分支的关联
+
+```shell
+git push --set-upstream origin cpp20_base
+```
+
+- commit 以及 push
+
+#### 当远程仓库变更了，可以切换本地远端的连接地址
+
+```shell
+git remote set-url origin [仓库ssh或者http地址]
+```
+
 
 
 ## 常见问题解决
