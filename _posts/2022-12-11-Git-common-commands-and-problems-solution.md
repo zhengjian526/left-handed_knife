@@ -10,6 +10,31 @@ keywords: Git, 常用命令, 问题解决
 
 ### Git基础
 
+#### 设置与配置
+
+##### git config
+
+- 检查配置信息
+
+```shell
+ git config --list
+```
+
+- 设置文本编辑器
+
+```shell
+git config --global core.editor "vim"
+```
+
+- 用户信息
+
+```shell
+$ git config --global user.name "John Doe"
+$ git config --global user.email johndoe@example.com
+```
+
+
+
 #### Tag相关
 
 
