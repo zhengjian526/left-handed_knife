@@ -1,6 +1,6 @@
 ---
 layout: post
-title:记录一个多进程高并发框架(不断维护优化)
+title: 记录一个多进程高并发框架(不断维护优化)
 categories: Linux系统编程
 description: 记录一个多进程高并发框架(不断维护优化)
 keywords: Linux, multi-process
