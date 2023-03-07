@@ -153,13 +153,265 @@ Flags:               fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cm
 
 ##### Linux命令绑核
 
+Linux命令可以将进程绑定在具体cpu核上。
 
+写一个简单的不会退出的C语言程序，编译成可执行文件cpu_affinity。
+
+```c
+#include <stdio.h>
+
+int main()
+{
+    while (1)
+    {
+        printf("cpu_affinity");
+    }
+}
+```
+
+使用`taskset`命令启动cpu_affinity程序，`-c`后接该程序需要绑定的cpu id。
+
+```shell
+# taskset -c 0 ./cpu_affinity
+```
+
+使用htop查看 ， cpu_affinity程序仅在cpu1上运行（cpu idx 为0）
+
+![linux_0003](/images/posts/linux/linux_0003.png)
+
+taskset -p  {pid} 查看mask：
+
+![linux_0004](/images/posts/linux/linux_0004.png)
+
+这里的mask = 1为位掩码， CPU亲和性（affinity）使用位掩码(bitmask)表示，每一位都表示一个CPU， 置1表示“绑定”。 最低位表示第一个逻辑CPU，最高位表示最后一个逻辑CPU。
+
+举例说明：
+
+| bitmask    | 含义            |
+| ---------- | --------------- |
+| 0x00000001 | cpu0            |
+| 0x00000003 | cpu0 & cpu1     |
+| 0xFFFFFFFF | cpu0到cpu31所有 |
+
+十六进制数e的二进制形式为`1110`，唯一的一个“0”在最低位，这意味着，除了cpu0不能用，其他的cpu1，2，3都可以使用。
+
+如果程序已经运行起来，可以使用`taskset`命令在程序运行时绑核（假设绑定在cpu0上）。
+
+```shell
+# taskset -cp 0 {pid}
+```
 
 ##### Linux API绑核
 
+在Linux中，CPU亲和性掩码数据结构就是`cpu_set_t`。设置核绑定的方法是`CPU_SET`。
 
+- **进程绑核**
 
+```C++
+#define _GNU_SOURCE        //这个必须定义在#include <sched.h>前
 
+#include <stdio.h>
+#include <sched.h>
+
+int main()
+{
+    int cpu_id = 0;            // 需要绑定的cpu
+    cpu_set_t mask;            // cpu核的位掩码
+    CPU_ZERO(&mask);           // 置空
+    CPU_SET(cpu_id, &mask);    // 将需要绑定的cpu号设置在mask中
+    if (sched_setaffinity(0, sizeof(mask), &mask) == -1) // 绑定
+    {
+        printf("failed to set affinity.\n");
+    }
+    else
+    {
+        printf("succeeded to set affinity.\n");
+    }
+    // 以上代码即绑定结束，下面代码用于查询绑定情况
+    cpu_set_t masked;           
+    CPU_ZERO(&masked);
+    if (sched_getaffinity(0, sizeof(masked), &masked) == -1)  // 获取cpu绑定情况
+    {
+        printf("failed to get affinity.\n");
+    }
+    else
+    {
+        // 检查cpu_id是否已经被成功绑定。
+        if (CPU_ISSET(cpu_id, &masked))
+        {
+            printf("succeeded to get affinity.\n");
+        }
+    }
+    
+    while (1)
+    {
+        // printf("hello");
+    }
+}
+```
+
+使用`gcc`编译，需要加上`-lpthread`
+
+```c
+ # gcc -o hello main.c -lpthread
+```
+
+直接使用`./hello`运行该程序，正常情况下会得到如下结果：
+
+![linux_0005](/images/posts/linux/linux_0005.png)
+
+查看htop发现进程已经成功绑定在CPU1上
+
+![linux_0006](/images/posts/linux/linux_0006.png)
+
+- 线程绑核
+
+```c++
+// #define _GNU_SOURCE              // C++无需引入
+
+#include <thread>
+#include <stdio.h>
+#include <sched.h>
+
+int main()
+{
+    std::thread
+    {
+        []()
+        {
+            int cpu_id = 0;                // 需要绑定的cpu
+            cpu_set_t mask;                // cpu核的位掩码
+            CPU_ZERO(&mask);               // 置空
+            CPU_SET(cpu_id, &mask);        // 将需要绑定的cpu号设置在mask中 
+            // 线程绑定方法
+            if (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) == -1)
+            {
+                printf("failed to set affinity.\n");
+            }
+            else
+            {
+                printf("succeeded to set affinity.\n");
+            }
+            // 以上代码即绑定结束，下面代码用于查询绑定情况
+            cpu_set_t masked;
+            CPU_ZERO(&masked);
+            // 获取cpu绑定情况
+            if (pthread_getaffinity_np(pthread_self(), sizeof(masked), &masked) == -1)
+            {
+                printf("failed to get affinity.\n");
+            }
+            else
+            {
+                // 检查cpu_id是否已经被成功绑定。
+                if (CPU_ISSET(cpu_id, &masked))
+                {
+                    printf("succeeded to get affinity.\n");
+                }
+            }
+            while (1)
+            {
+                // printf("hello");
+            }
+        }
+    }.join();
+}
+```
+
+使用`g++`编译，需要加上`-lpthread`
+
+```bash
+# g++ -o hello main.c -lpthread
+```
+
+打开`htop`我们能看到`cpu0`已经被`hello`进程的子线程使用上，绑核成功。
+
+![linux_0007](/images/posts/linux/linux_0007.png)
+
+![linux_0008](/images/posts/linux/linux_0008.png)
+
+#### 绑核性能测试对比
+
+测试代码：
+
+```c++
+#include <thread>
+#include <stdio.h>
+#include <sched.h>
+#include <vector>
+#include <chrono>
+#include <iostream>
+#define TIME_STAMP_START(name) auto time_start_##name = std::chrono::steady_clock::now();
+#define TIME_STAMP_END(name)                                                                           \
+  {                                                                                                          \
+    auto time_end_##name = std::chrono::steady_clock::now();                                                 \
+    auto time_cost = std::chrono::duration<double, std::milli>(time_end_##name - time_start_##name).count(); \
+    std::cout << #name " Time Cost # " << time_cost << " ms ---------------------" << std::endl;             \
+  }
+int main()
+{
+    std::thread
+    {
+        []()
+        {
+            /*
+            int cpu_id = 0;                // 需要绑定的cpu
+            cpu_set_t mask;                // cpu核的位掩码
+            CPU_ZERO(&mask);               // 置空
+            CPU_SET(cpu_id, &mask);        // 将需要绑定的cpu号设置在mask中
+            if (pthread_setaffinity_np(pthread_self(), sizeof(mask), &mask) == -1)
+            {
+                printf("failed to set affinity.\n");
+            }
+            else
+            {
+                printf("succeeded to set affinity.\n");
+            }
+            cpu_set_t masked;
+            CPU_ZERO(&masked);
+            if (pthread_getaffinity_np(pthread_self(), sizeof(masked), &masked) == -1)
+            {
+                printf("failed to get affinity.\n");
+            }
+            else
+            {
+                if (CPU_ISSET(cpu_id, &masked))
+                {
+                    printf("succeeded to get affinity.\n");
+                }
+            }
+			*/
+            TIME_STAMP_START(cpu_affinity);
+            int64_t sum = 0;
+            // std::cout << "No CPU Affinity\n";
+            for (size_t i = 0; i < 1000000000; i++)
+            {
+                sum += 1;
+            }
+            
+            TIME_STAMP_END(cpu_affinity);
+        }
+    }.join();
+}
+```
+
+测试结果如下，可见绑核后处理能力有一定提升，但当绑定的核心数超过线程数量时，其效率并无明显提高。另外上述测试的前提是**CPU资源密集的场景**才有效果。
+
+```shell
+admin@39b648fe04b7:/workspace/tools/test$ ./cpu_affinity 
+cpu_affinity Time Cost # 2655.82 ms ---------------------
+admin@39b648fe04b7:/workspace/tools/test$ ./cpu_affinity 
+cpu_affinity Time Cost # 2661.5 ms ---------------------
+admin@39b648fe04b7:/workspace/tools/test$ taskset -c 0 ./cpu_affinity
+cpu_affinity Time Cost # 2586.99 ms ---------------------
+admin@39b648fe04b7:/workspace/tools/test$ taskset -c 0 ./cpu_affinity
+cpu_affinity Time Cost # 2549.79 ms ---------------------
+admin@39b648fe04b7:/workspace/tools/test$ taskset -c 0,10 ./cpu_affinity
+cpu_affinity Time Cost # 2547.47 ms ---------------------
+admin@39b648fe04b7:/workspace/tools/test$ taskset -c 0,10 ./cpu_affinity
+cpu_affinity Time Cost # 2559.86 ms ---------------------
+```
+
+# NUMA架构
 
 
 
@@ -167,3 +419,4 @@ Flags:               fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cm
 
 - Linux环境的CPU亲和性配置 - maomao.run的文章 - 知乎 https://zhuanlan.zhihu.com/p/461928365
 - https://blog.csdn.net/qq_38232598/article/details/114263105
+- https://zhuanlan.zhihu.com/p/336365600
