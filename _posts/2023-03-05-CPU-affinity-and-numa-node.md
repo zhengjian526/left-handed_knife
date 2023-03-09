@@ -411,12 +411,360 @@ admin@39b648fe04b7:/workspace/tools/test$ taskset -c 0,10 ./cpu_affinity
 cpu_affinity Time Cost # 2559.86 ms ---------------------
 ```
 
-# NUMA架构
+# NUMA
+
+## 前言背景
+
+在NUMA出现之前，CPU朝着高频率的方向发展遇到了天花板，转而向着多核心的方向发展。
+
+在一开始，内存控制器还在北桥中，所有CPU对内存的访问都要通过北桥来完成。此时所有CPU访问内存都是“一致的”，如下图所示：
+
+![linux_0009](/images/posts/linux/linux_0009.jpg)
+
+这样的架构称为UMA(Uniform Memory Access)，直译为“统一内存访问”，这样的架构对软件层面来说非常容易，总线模型保证所有的内存访问是一致的，即**每个处理器核心共享相同的内存地址空间**。但随着CPU核心数的增加，这样的架构难免遇到问题，比如对总线的带宽带来挑战、访问同一块内存的冲突问题。为了解决这些问题，有人搞出了NUMA。
+
+### **概念**
+
+NUMA具有多个节点(Node)，每个节点可以拥有多个CPU(每个CPU可以具有多个核或线程)，节点内使用共有的内存控制器，因此节点的所有内存对于本节点的所有CPU都是等同的，而对于其它节点中的所有CPU都是不同的。节点可分为本地节点(Local Node)、邻居节点(Neighbour Node)和远端节点(Remote Node)三种类型。
+
+**本地节点：**对于某个节点中的所有CPU，此节点称为本地节点；
+
+**邻居节点：**与本地节点相邻的节点称为邻居节点；
+
+**远端节点：**非本地节点或邻居节点的节点，称为远端节点。
+
+邻居节点和远端节点，称作非本地节点(Off Node)。
+
+CPU访问不同类型节点内存的速度是不相同的：本地节点>邻居节点>远端节点。访问本地节点的速度最快，访问远端节点的速度最慢，即访问速度与节点的距离有关，距离越远访问速度越慢，此距离称作Node Distance。
+
+常用的NUMA系统中：硬件设计已保证系统中所有的Cache是一致的(Cache Coherent, ccNUMA)；不同类型节点间的Cache同步时间不一样，会导致资源竞争不公平，对于某些特殊的应用，可以考虑使用FIFO Spinlock保证公平性。
+
+### **关键信息**
+
+1) 物理内存区域与Node号之间的映射关系；
+
+2) 各Node之间的Node Distance；
+
+3) 逻辑CPU号与Node号之间的映射关系。
 
 
+
+## NUMA构架细节
+
+NUMA 全称 Non-Uniform Memory Access，译为“非一致性内存访问”。这种构架下，不同的内存器件和CPU核心从属不同的 Node，每个 Node 都有自己的集成内存控制器（IMC，Integrated Memory Controller）。
+
+在 Node 内部，架构类似SMP，使用 IMC Bus 进行不同核心间的通信；不同的 Node 间通过QPI（Quick Path Interconnect）进行通信，如下图所示：
+
+![linux_0010](/images/posts/linux/linux_0010.jpg)
+
+一句话概括：**NUMA 指的是针对某个 CPU，内存访问的距离和时间是不一样的。是为了解决多 CPU 系统下共享 BUS 带来的性能问题。（这句话可能不太严谨，不是为了解决，而是事实上解决了。）**
+
+## NUMA设置
+
+### Linux命令行
+
+通过 `numactl --hardware `可以查看硬件对NUMA的支持信息：
+
+```shell
+[jzheng@cr8 /home/jzheng/test]$numactl --hardware
+available: 2 nodes (0-1)
+node 0 cpus: 0 2 4 6 8 10 12 14
+node 0 size: 97857 MB
+node 0 free: 425 MB
+node 1 cpus: 1 3 5 7 9 11 13 15
+node 1 size: 163840 MB
+node 1 free: 2239 MB
+node distances:
+node   0   1
+  0:  10  21
+  1:  21  10
+```
+
+**还有个实用的工具： ` lstopo`  `lstopo --of png > server.png` 可以查看服务器硬件的拓扑结构。**
+
+有上述可知：
+
+1. CPU被分成两组， node0和node1；
+2. node0组CPU分配了 大小为95G的内存， node1组CPU分配了160G（该服务器共255G内存）；
+3. node distances 是一个二维矩阵，node[i][j] 表示 node i 访问 node j 的内存的相对距离。比如 node 0 访问 node 0 的内存的距离是 10，而 node 0 访问 node 1 的内存的距离是 21。和 UMA 架构不同，在 NUMA 架构下，内存的访问出现了本地和远程的区别：访问远程内存的延时会明显高于访问本地内存。
+
+执行 `numactl --show` 显示当前的 NUMA 设置：
+
+```shell
+[jzheng@cr8 /home/jzheng/test]$numactl --show
+policy: default
+preferred node: current
+physcpubind: 0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15
+cpubind: 0 1
+nodebind: 0 1
+membind: 0 1
+```
+
+1. 当前服务器的NUMA策略为默认；
+2. 所有的cpu分别绑定在node0和node1上执行；
+
+- numactl 命令还有几个重要选项：
+
+1. `--cpubind=0`： 绑定到 node 0 的 CPU 上执行。
+2. `--membind=1`： 只在 node 1 上分配内存。
+3. `--interleave=nodes`：nodes 可以是 all、N,N,N 或 N-N，表示在 nodes 上轮循（round robin）分配内存。
+4. `--physcpubind=cpus`：cpus 是 /proc/cpuinfo 中的 processor（超线程） 字段，cpus 的格式与 --interleave=nodes 一样，表示绑定到 cpus 上运行。
+5. `--preferred=1`： 优先考虑从 node 1 上分配内存。
+
+- numactl 命令的几个例子：
+
+```shell
+# 运行 test_program 程序，参数是 argument，绑定到 node 0 的 CPU 和 node 1 的内存
+numactl --cpubind=0 --membind=1 test_program arguments
+
+# 在 processor 0-4，8-12 上运行 test_program
+numactl --physcpubind=0-4,8-12 test_program arguments
+
+# 轮询分配内存
+numactl --interleave=all test_program arguments
+
+# 优先考虑从 node 1 上分配内存
+numactl --preferred=1
+```
+
+#### 命令行测试
+
+```c++
+#include <thread>
+#include <stdio.h>
+#include <sched.h>
+#include <vector>
+#include <chrono>
+#include <iostream>
+#define TIME_STAMP_START(name) auto time_start_##name = std::chrono::steady_clock::now();
+#define TIME_STAMP_END(name)                                                                           \
+  {                                                                                                          \
+    auto time_end_##name = std::chrono::steady_clock::now();                                                 \
+    auto time_cost = std::chrono::duration<double, std::milli>(time_end_##name - time_start_##name).count(); \
+    std::cout << #name " Time Cost # " << time_cost << " ms ---------------------" << std::endl;             \
+  }
+int main()
+{
+    std::thread
+    {
+        []()
+        {
+            TIME_STAMP_START(numa_node);
+            int64_t size = 2000;
+            // 按列遍历，避免 CPU cache 的影响
+            std::vector<std::vector<uint64_t>> data(size, std::vector<uint64_t>(size));
+            for (int col = 0; col < size; ++col) {
+                for (int row = 0; row < size; ++row) {
+                    data[row][col] = rand();
+                }
+            }
+            
+            TIME_STAMP_END(numa_node);
+        }
+    }.join();
+    return 0;
+}
+```
+
+实测结果：
+
+```shell
+---------------第一次对比
+[jzheng@cr8 /home/jzheng/test]$numactl --cpubind=1 --membind=1 ./numa_node
+numa_node Time Cost # 229.36 ms ---------------------
+[jzheng@cr8 /home/jzheng/test]$numactl --cpubind=0 --membind=1 ./numa_node
+numa_node Time Cost # 274.399 ms ---------------------
+---------------第二次对比
+[jzheng@cr8 /home/jzheng/test]$numactl --cpubind=1 --membind=1 ./numa_node
+numa_node Time Cost # 231.561 ms ---------------------
+[jzheng@cr8 /home/jzheng/test]$numactl --cpubind=0 --membind=1 ./numa_node
+numa_node Time Cost # 278.001 ms ---------------------
+```
+
+可以看出 CPU访问距离较远的numa节点时会比访问本地内存节点速度慢，大概慢20%以上。
+
+### Linux API
+
+头文件为
+
+```c++
+#include <numa.h>
+#include <numaif.h>
+//策略设置接口，具体实用通过man set_mempolicy查看
+int set_mempolicy(int mode, unsigned long *nodemask, unsigned long maxnode);
+
+```
+
+## NUMA策略
+
+随着系统中的CPU和内存增加，物理上将内存分成了numa节点。而运行时系统从哪个节点上分配内存就会影响到系统运行的性能。
+
+内核当然可以提供一种默认的分配策略，而同时用户或许也会希望能够设置自己的分配行为。
+
+今天我们就来看看内核提供了哪些分配策略，又是如何实现的。
+
+### 最关键的数据结构 -- mempolicy
+
+对我来说，每次要学习一个新的概念，最关键的就是学习这个概念背后的数据结构，而算法则是对数据结构的一个操作。
+
+在numa策略中，内核最关键的数据结构是mempolicy。
+
+```shell
+    mempolicy
+    +------------------------------+
+    |refcnt                        |
+    |    (atomic_t)                |
+    |mode                          |
+    |flags                         |
+    |    (unsigned short)          |
+    |v                             |
+    |   +--------------------------+
+    |   |preferred_node            |
+    |   |   (short)                |
+    |   |nodes                     |
+    |   |   (nodemask_t)           |
+    |   +--------------------------+
+    |w                             |
+    |   +--------------------------+
+    |   |cpuset_mems_allowed       |
+    |   |user_nodemask             |
+    |   |   (nodemask_t)           |
+    +---+--------------------------+
+```
+
+这个结构相对来说是简单的。其中最重要的就是mode成员：
+
+- mode 指定了策略的模式
+
+知道了这个策略的模式，你就大致能猜到策略的运作和其他成员的含义。那我们就来看看内核当前都有哪些模式：
+
+```c
+    enum {
+    	MPOL_DEFAULT,
+    	MPOL_PREFERRED,
+    	MPOL_BIND,
+    	MPOL_INTERLEAVE,
+    	MPOL_LOCAL,
+    	MPOL_MAX,	/* always last member of enum */
+    };
+```
+
+具体每个策略的含义暂且不表，因为这个可以在网上直接搜到。而我们想要说的是，这个数据结构是如何影响到一个进程的内存分配的。
+
+### mempolicy和进程的关联
+
+既然是要控制进程的内存分配策略，那么必然这个数据结构就要和进程发生关系，否则怎么能够控制到进程呢？
+
+这时候，还是数据结构能帮上忙。
+
+```sh
+                 task_struct
+                 +----------------------+
+                 |mempolicy             |
+                 |   (struct mempolicy*)|
+                 |mm                    |
+                 |   (struct mm_struct*)|
+                 +----------------------+
+                    /               \
+                 /                    \
+              /                         \
+           /                              \
+      vma                              vma
+      +------------------------+       +------------------------+
+      |vm_ops                  |       |vm_ops                  |
+      |    get_policy          |       |    get_policy          |
+      |                        |       |                        |
+      |vm_policy               |       |vm_policy               |
+      |    (struct mempolicy*) |       |    (struct mempolicy*) |
+      +------------------------+       +------------------------+
+```
+
+从这个结构中我们可以看到，在进程和vma级别都有各自的mempolicy指针。当我们在分配内存时，就会根据对应的mempolicy来分配。
+
+那接下来我们就要回答两个问题：
+
+- 如何设置mempolicy
+- mempolicy如何影响分配
+
+### 设置mempolicy的用户态接口
+
+首先我们来回答第一个问题--如何设置mempolicy。因为mempolicy分别在进程和vma两个层次，所以内核提供了对应的两个接口来设置。
+
+- set_mempolicy
+- mbind
+
+#### 设置进程级numa策略 -- set_mempolicy
+
+首先是进程级别的numa策略设置，由函数set_mempolicy来负责。
+
+具体函数的含义大家查找man就可以了，我们这里来看看这个函数干的活。
+
+```c
+    set_mempolicy() -> kernel_set_mempolicy()
+        get_nodes(&nodes, nmask, maxnode)
+        do_set_mempolicy(mode, flags, &nodes)
+            new = mpol_new(mode, flags, nodes)
+            task_lock(current)
+            mpol_set_nodemask(new, nodes, scratch)
+            old = current->mempolicy
+            current->mempolicy = new
+            task_unlock(current)
+            mpol_put(old)
+```
+
+打开一看其实很简单，就是给task_struct上新安装一个mempolicy。得嘞。
+
+#### 设置区域级numa策略 -- mbind
+
+除了进程级别的numa策略，内核还提供了vma级别细粒度的策略设置，由函数mbind来负责。
+
+mbind函数除了设置vma级别的numa策略，还会做内存迁移。所以这个函数实际上是做了两件事情。
+
+```
+    mbind(start, len, mode, nmask, maxnode, flags) -> kernel_mbind()
+        get_nodes(&nodes, nmask, maxnode)
+        do_mbind(start, len, mode, mode_flags, &nodes, flags)
+            new = mpol_new(mode, mode_flags, nmask)
+            migrate_prep()
+                lru_add_drain_all()
+            queue_pages_range(mm, start, end, nmask, flags | MPOL_MF_INVERT, &pagelist)
+            mbind_range(mm, start, end, new)
+            migrage_pages(&pagelist, new_page, NULL, start, )
+```
+
+所以整个函数只有在mbind_range上才是去更新vma对应的策略，其他的步骤都是为了做内存迁移准备的。
+
+### numa策略的作用
+
+了解了策略的数据结构，了解了这个结构和进程之间的关系，也了解了如何设置策略，那么接下来就是要看看这个设置好的策略究竟如何起作用了。
+
+大家猜猜，内核中会在哪些地方起作用呢？嗯，对了，至少有两个地方会发挥numa策略的作用。
+
+- page fault
+- numa balance
+
+首先是在缺页处理时当然会按照当前的策略去分配内存，其次就是会动态的检测进程的内存是否符合当前的策略并进行相应的调整。
+
+### page fault
+
+发生缺页异常时，内核会去分配内存并将页表填好。此时就会考虑到从哪里去分配内存，在这个时候就会去参考之前设置的numa策略。
+
+```c
+do_anonymous_page()
+    alloc_zeroed_user_highpage_movable() -> __alloc_zeroed_user_highpage()
+        alloc_pages_vma(), alloc with NUMA policy(understand how policy works)
+            pol = get_vma_policy(vma, addr), pol from vma or task policy
+            alloc_page_interleave(), if pol->mode == MPOL_INTERLEAVE
+            nmask = policy_nodemask()
+```
+
+比如说在我们熟悉的do_anonymous_page()过程中需要去分配页，就会调用alloc_pages_vma()根据对应的mempolicy来分配。
 
 # 参考
 
-- Linux环境的CPU亲和性配置 - maomao.run的文章 - 知乎 https://zhuanlan.zhihu.com/p/461928365
+- https://zhuanlan.zhihu.com/p/461928365
 - https://blog.csdn.net/qq_38232598/article/details/114263105
 - https://zhuanlan.zhihu.com/p/336365600
+- https://zhuanlan.zhihu.com/p/62795773
+- https://zhuanlan.zhihu.com/p/67558970
+- https://richardweiyang-2.gitbook.io/kernel-exploring/00-index/07-mempolicy
