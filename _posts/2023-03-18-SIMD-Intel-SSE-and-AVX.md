@@ -30,13 +30,13 @@ SIMD(**Single Instruction Multiple Data**)即单指令流多数据流，是一�
 
 SSE/AVX指令主要定义于以下一些头文件中：
 
-- <xmmintrin.h> : SSE, 支持同时对4个32位单精度浮点数的操作。
-- <emmintrin.h> : SSE 2, 支持同时对2个64位双精度浮点数的操作。
-- <pmmintrin.h> : SSE 3, 支持对SIMD寄存器的水平操作(horizontal operation)，如hadd, hsub等...。
-- <tmmintrin.h> : SSSE 3, 增加了额外的instructions。
-- <smmintrin.h> : SSE 4.1, 支持点乘以及更多的整形操作。
-- <nmmintrin.h> : SSE 4.2, 增加了额外的instructions。
-- <immintrin.h> : AVX, 支持同时操作8个单精度浮点数或4个双精度浮点数。
+- < xmmintrin.h > : SSE, 支持同时对4个32位单精度浮点数的操作。
+- < emmintrin.h > : SSE 2, 支持同时对2个64位双精度浮点数的操作。
+- < pmmintrin.h > : SSE 3, 支持对SIMD寄存器的水平操作(horizontal operation)，如hadd, hsub等...。
+- < tmmintrin.h > : SSSE 3, 增加了额外的instructions。
+- < smmintrin.h > : SSE 4.1, 支持点乘以及更多的整形操作。
+- < nmmintrin.h > : SSE 4.2, 增加了额外的instructions。
+- < immintrin.h > : AVX, 支持同时操作8个单精度浮点数或4个双精度浮点数。
 
 每一个头文件都包含了之前的所有头文件，所以如果你想要使用SSE4.2以及之前SSE3, SSE2, SSE中的所有函数就只需要包含<nmmintrin.h>头文件。
 
