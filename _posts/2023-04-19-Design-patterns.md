@@ -232,12 +232,108 @@ Goodbye, I was the Subject.
 改进后的代码：
 
 ```C++
+#include <functional>
+#include <string>
+#include <map>
+#include <iostream>
+using namespace std;
 
+class NonCopybale
+{
+ public:
+  NonCopybale(const NonCopybale&) = delete;
+  void operator=(const NonCopybale&) = delete;
+
+ protected:
+  NonCopybale() = default;
+  ~NonCopybale() = default;
+};
+
+template<typename Func>
+class Event : public NonCopybale
+{
+public:
+	Event(/* args */) = default;
+	~Event() = default;
+	//注册观察者
+	int Connect(Func&& f)
+	{
+		return Assign(f);
+	}
+	int Connect(const Func& f)
+	{
+		return Assign(f);
+	}
+	//移除观察者
+	void DisConnect(int key)
+	{
+		connections_.erase(key);
+		std::cout << "size: " << connections_.size() << std::endl;
+	}
+	//通知所有观察者
+	template<typename ...Args>
+	void Notify(Args&& ...args)
+	{
+		for(auto& p : connections_) {
+			p.second(std::forward<Args>(args)...);
+		}
+	}
+private:
+	template<typename F>
+	int Assign(F&& f)
+	{
+		int k = observer_id_++;
+		connections_.emplace(k, std::forward<F>(f));
+		std::cout << "size: " << connections_.size() << std::endl;
+		return k;
+	}
+private:
+	int observer_id_;
+	std::map<int, Func> connections_;
+};
+
+struct Obj
+{
+	void print(int a, int b)
+	{
+		std::cout << a << ", " << b << std::endl;
+	}
+};
+void print(int a, int b)
+{
+	std::cout << a << ", " << b << std::endl;
+}
+
+
+int main()
+{
+	Event<std::function<void(int,int)>> event;
+	//注册普通函数
+	int key1 = event.Connect(print);
+	Obj ob;
+	//注册lambda
+	int key2 = event.Connect([](int a, int b) {
+        std::cout << a << ", " << b << std::endl;
+    });
+	//funciton注册
+	std::function<void(int,int)> f = 
+			std::bind(&Obj::print, &ob, std::placeholders::_1, std::placeholders::_2);
+	int key3 = event.Connect(f);
+	int a = 111, b = 222;
+	event.Notify(a, b);
+	//移除观察者
+	event.DisConnect(key1);
+	a = 444; b = 555;
+	event.Notify(a, b);
+  	return 0;
+
+}
 ```
 
-
+C++11实现的观察者模式，内部维护泛型函数列表，观察者只需要将观察者函数注册到要观察的事件Event中即可，消除了继承导致的强耦合。同时通知的接口使用可变参数模板，支持任意参数，消除了接口变化的影响。
 
 
 ## 参考
 
 - https://refactoringguru.cn/design-patterns
+- 祁宇 <<深入应用C++11：代码优化与工程级应用>>
