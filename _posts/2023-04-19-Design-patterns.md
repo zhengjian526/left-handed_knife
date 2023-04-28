@@ -13,6 +13,24 @@ keywords: 设计模式, 设计模式代码, 设计模式改进
 
 ![design_patterns_0001](/images/posts/design_patterns/design_patterns_0001.png)
 
+## UML常用符号说明
+
+UML 类图中常用的符号和表示说明如下：
+
+1. 类（Class）：用矩形表示，类名写在矩形上方。
+2. 抽象类（Abstract Class）：用带有折角的矩形表示，类名写在矩形上方，折角表示该类是抽象类。
+3. 接口（Interface）：用带有带圆圈的矩形表示，类名写在矩形上方，圆圈表示该类是接口。
+4. 对象（Object）：用矩形表示，对象名写在矩形内部。
+5. 包（Package）：用矩形表示，包名写在矩形上方。
+6. 依赖关系（Dependency）：用带箭头的虚线表示，箭头方向表示依赖的方向。依赖表示一个类的实现需要调用另一个类的方法。
+7. 继承关系（Inheritance）：用带空心箭头的实线表示，箭头指向基类。继承表示一个子类继承了一个父类的属性和方法。
+8. 实现关系（Realization）：用实线箭头和带带圆圈的矩形表示，箭头指向接口，矩形写实现类名。实现关系表示一个类实现了一个接口中定义的所有方法。
+9. 关联关系（Association）：用带箭头的实线表示，箭头指向被关联的类。关联表示一个类与另一个类有联系，可以在关联上标注角色、多重性、名称等。
+10. 聚合关系（Aggregation）：用带空心菱形的实线表示，菱形指向聚合的部分。聚合关系表示一个整体由多个部分组成，但是部分和整体的生命周期可分离。
+11. 组合关系（Composition）：用带实心菱形的实线表示，菱形指向组成的部分。组合关系表示一个整体由多个组成部分组成，但是部分和整体的生命周期不可分离。
+
+这些符号和表示可以帮助我们在 UML 类图中清晰表示出类之间的关系。
+
 ## 创建型
 
 ### 生成器模式
@@ -565,6 +583,145 @@ int main()
 ```
 
 C++11实现的观察者模式，内部维护泛型函数列表，观察者只需要将观察者函数注册到要观察的事件Event中即可，消除了继承导致的强耦合。同时通知的接口使用可变参数模板，支持任意参数，消除了接口变化的影响。
+
+
+
+### 策略模式
+
+**策略**是一种行为设计模式， 它将一组行为转换为对象， 并使其在原始上下文对象内部能够相互替换。
+
+原始对象被称为上下文， 它包含指向策略对象的引用并将执行行为的任务分派给策略对象。 为了改变上下文完成其工作的方式， 其他对象可以使用另一个对象来替换当前链接的策略对象。
+
+**使用示例：** 策略模式在 C++ 代码中很常见。 它经常在各种框架中使用， 能在不扩展类的情况下向用户提供改变其行为的方式。
+
+**识别方法：** 策略模式可以通过允许嵌套对象完成实际工作的方法以及允许将该对象替换为不同对象的设置器来识别。
+
+示例代码：
+
+```C++
+#include <iostream>
+#include <memory>
+#include <algorithm>
+/**
+ * The Strategy interface declares operations common to all supported versions
+ * of some algorithm.
+ *
+ * The Context uses this interface to call the algorithm defined by Concrete
+ * Strategies.
+ */
+class Strategy
+{
+public:
+    virtual ~Strategy() = default;
+    virtual std::string doAlgorithm(std::string_view data) const = 0;
+};
+
+/**
+ * The Context defines the interface of interest to clients.
+ */
+
+class Context
+{
+    /**
+     * @var Strategy The Context maintains a reference to one of the Strategy
+     * objects. The Context does not know the concrete class of a strategy. It
+     * should work with all strategies via the Strategy interface.
+     */
+private:
+    std::unique_ptr<Strategy> strategy_;
+    /**
+     * Usually, the Context accepts a strategy through the constructor, but also
+     * provides a setter to change it at runtime.
+     */
+public:
+    explicit Context(std::unique_ptr<Strategy> &&strategy = {}) : strategy_(std::move(strategy))
+    {
+    }
+    /**
+     * Usually, the Context allows replacing a Strategy object at runtime.
+     */
+    void set_strategy(std::unique_ptr<Strategy> &&strategy)
+    {
+        strategy_ = std::move(strategy);
+    }
+    /**
+     * The Context delegates some work to the Strategy object instead of
+     * implementing +multiple versions of the algorithm on its own.
+     */
+    void doSomeBusinessLogic() const
+    {
+        if (strategy_) {
+            std::cout << "Context: Sorting data using the strategy (not sure how it'll do it)\n";
+            std::string result = strategy_->doAlgorithm("aecbd");
+            std::cout << result << "\n";
+        } else {
+            std::cout << "Context: Strategy isn't set\n";
+        }
+    }
+};
+
+/**
+ * Concrete Strategies implement the algorithm while following the base Strategy
+ * interface. The interface makes them interchangeable in the Context.
+ */
+class ConcreteStrategyA : public Strategy
+{
+public:
+    std::string doAlgorithm(std::string_view data) const override
+    {
+        std::string result(data);
+        std::sort(std::begin(result), std::end(result));
+
+        return result;
+    }
+};
+class ConcreteStrategyB : public Strategy
+{
+    std::string doAlgorithm(std::string_view data) const override
+    {
+        std::string result(data);
+        std::sort(std::begin(result), std::end(result), std::greater<>());
+
+        return result;
+    }
+};
+/**
+ * The client code picks a concrete strategy and passes it to the context. The
+ * client should be aware of the differences between strategies in order to make
+ * the right choice.
+ */
+
+void clientCode()
+{
+    Context context(std::make_unique<ConcreteStrategyA>());
+    std::cout << "Client: Strategy is set to normal sorting.\n";
+    context.doSomeBusinessLogic();
+    std::cout << "\n";
+    std::cout << "Client: Strategy is set to reverse sorting.\n";
+    context.set_strategy(std::make_unique<ConcreteStrategyB>());
+    context.doSomeBusinessLogic();
+}
+
+int main()
+{
+    clientCode();
+    return 0;
+}
+```
+
+输出结果：
+
+```C++
+Client: Strategy is set to normal sorting.
+Context: Sorting data using the strategy (not sure how it'll do it)
+abcde
+
+Client: Strategy is set to reverse sorting.
+Context: Sorting data using the strategy (not sure how it'll do it)
+edcba
+```
+
+
 
 
 ## 参考
