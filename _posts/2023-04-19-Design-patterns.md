@@ -273,6 +273,198 @@ Product parts: PartA1, PartC
 
 ## 结构型
 
+### 适配器模式
+
+**适配器**是一种结构型设计模式， 它能使不兼容的对象能够相互合作。适配器可担任两个对象间的封装器， 它会接收对于一个对象的调用， 并将其转换为另一个对象可识别的格式和接口。
+
+**使用示例：** 适配器模式在 C++ 代码中很常见。 基于一些遗留代码的系统常常会使用该模式。 在这种情况下， 适配器让遗留代码与现代的类得以相互合作。
+
+**识别方法：** 适配器可以通过以不同抽象或接口类型实例为参数的构造函数来识别。 当适配器的任何方法被调用时， 它会将参数转换为合适的格式， 然后将调用定向到其封装对象中的一个或多个方法。
+
+**应用场景：** 
+
+- 当你希望使用某个类， 但是其接口与其他代码不兼容时， 可以使用适配器类。
+- 适配器模式允许你创建一个中间层类， 其可作为代码与遗留类、 第三方类或提供怪异接口的类之间的转换器。
+- 如果您需要复用这样一些类， 他们处于同一个继承体系， 并且他们又有了额外的一些共同的方法， 但是这些共同的方法不是所有在这一继承体系中的子类所具有的共性。
+
+**实例代码1**
+
+```c++
+#include <string>
+#include <algorithm>
+#include <iostream>
+/**
+ * The Target defines the domain-specific interface used by the client code.
+ */
+class Target {
+ public:
+  virtual ~Target() = default;
+
+  virtual std::string Request() const {
+    return "Target: The default target's behavior.";
+  }
+};
+
+/**
+ * The Adaptee contains some useful behavior, but its interface is incompatible
+ * with the existing client code. The Adaptee needs some adaptation before the
+ * client code can use it.
+ */
+class Adaptee {
+ public:
+  std::string SpecificRequest() const {
+    return ".eetpadA eht fo roivaheb laicepS";
+  }
+};
+
+/**
+ * The Adapter makes the Adaptee's interface compatible with the Target's
+ * interface.
+ */
+class Adapter : public Target {
+ private:
+  Adaptee *adaptee_;
+
+ public:
+  Adapter(Adaptee *adaptee) : adaptee_(adaptee) {}
+  std::string Request() const override {
+    std::string to_reverse = this->adaptee_->SpecificRequest();
+    std::reverse(to_reverse.begin(), to_reverse.end());
+    return "Adapter: (TRANSLATED) " + to_reverse;
+  }
+};
+
+/**
+ * The client code supports all classes that follow the Target interface.
+ */
+void ClientCode(const Target *target) {
+  std::cout << target->Request();
+}
+
+int main() {
+  std::cout << "Client: I can work just fine with the Target objects:\n";
+  Target *target = new Target;
+  ClientCode(target);
+  std::cout << "\n\n";
+  Adaptee *adaptee = new Adaptee;
+  std::cout << "Client: The Adaptee class has a weird interface. See, I don't understand it:\n";
+  std::cout << "Adaptee: " << adaptee->SpecificRequest();
+  std::cout << "\n\n";
+  std::cout << "Client: But I can work with it via the Adapter:\n";
+  Adapter *adapter = new Adapter(adaptee);
+  ClientCode(adapter);
+  std::cout << "\n";
+
+  delete target;
+  delete adaptee;
+  delete adapter;
+
+  return 0;
+}
+```
+
+输出打印：
+
+```shell
+Client: I can work just fine with the Target objects:
+Target: The default target's behavior.
+
+Client: The Adaptee class has a weird interface. See, I don't understand it:
+Adaptee: .eetpadA eht fo roivaheb laicepS
+
+Client: But I can work with it via the Adapter:
+Adapter: (TRANSLATED) Special behavior of the Adaptee.
+```
+
+**实例代码2（多重继承）**
+
+可以使用多重继承来实现适配器模式
+
+```c++
+#include <string>
+#include <algorithm>
+#include <iostream>
+/**
+ * The Target defines the domain-specific interface used by the client code.
+ */
+class Target {
+ public:
+  virtual ~Target() = default;
+  virtual std::string Request() const {
+    return "Target: The default target's behavior.";
+  }
+};
+
+/**
+ * The Adaptee contains some useful behavior, but its interface is incompatible
+ * with the existing client code. The Adaptee needs some adaptation before the
+ * client code can use it.
+ */
+class Adaptee {
+ public:
+  std::string SpecificRequest() const {
+    return ".eetpadA eht fo roivaheb laicepS";
+  }
+};
+
+/**
+ * The Adapter makes the Adaptee's interface compatible with the Target's
+ * interface using multiple inheritance.
+ */
+class Adapter : public Target, public Adaptee {
+ public:
+  Adapter() {}
+  std::string Request() const override {
+    std::string to_reverse = SpecificRequest();
+    std::reverse(to_reverse.begin(), to_reverse.end());
+    return "Adapter: (TRANSLATED) " + to_reverse;
+  }
+};
+
+/**
+ * The client code supports all classes that follow the Target interface.
+ */
+void ClientCode(const Target *target) {
+  std::cout << target->Request();
+}
+
+int main() {
+  std::cout << "Client: I can work just fine with the Target objects:\n";
+  Target *target = new Target;
+  ClientCode(target);
+  std::cout << "\n\n";
+  Adaptee *adaptee = new Adaptee;
+  std::cout << "Client: The Adaptee class has a weird interface. See, I don't understand it:\n";
+  std::cout << "Adaptee: " << adaptee->SpecificRequest();
+  std::cout << "\n\n";
+  std::cout << "Client: But I can work with it via the Adapter:\n";
+  Adapter *adapter = new Adapter;
+  ClientCode(adapter);
+  std::cout << "\n";
+
+  delete target;
+  delete adaptee;
+  delete adapter;
+
+  return 0;
+}
+```
+
+输出打印：
+
+```shell
+Client: I can work just fine with the Target objects:
+Target: The default target's behavior.
+
+Client: The Adaptee class has a weird interface. See, I don't understand it:
+Adaptee: .eetpadA eht fo roivaheb laicepS
+
+Client: But I can work with it via the Adapter:
+Adapter: (TRANSLATED) Special behavior of the Adaptee.
+```
+
+
+
 ### 装饰器模式
 
 **装饰**是一种结构设计模式， 允许你通过将对象放入特殊封装对象中来为原对象增加新的行为。由于目标对象和装饰器遵循同一接口， 因此你可用装饰来对对象进行无限次的封装。 结果对象将获得所有封装器叠加而来的行为。
