@@ -226,6 +226,37 @@ git config --global credential.helper store
 git config --global credential.helper 'cache --timeout=600'
 ```
 
+### 报错：git pull时报错ssh_exchange_identification: Connection closed by remote host
+
+排查思路: 首先确定是ssh的问题，使用ssh -v github.com进行debug，打印信息为：
+
+```shell
+OpenSSH_7.6p1 Ubuntu-4ubuntu0.5, OpenSSL 1.0.2n  7 Dec 2017
+debug1: Reading configuration data /etc/ssh/ssh_config
+debug1: /etc/ssh/ssh_config line 19: Applying options for *
+debug1: Connecting to github.com [20.205.243.166] port 22.
+debug1: Connection established.
+debug1: identity file /home/corerain/.ssh/id_rsa type 0
+debug1: key_load_public: No such file or directory
+debug1: identity file /home/corerain/.ssh/id_rsa-cert type -1
+debug1: key_load_public: No such file or directory
+debug1: identity file /home/corerain/.ssh/id_dsa type -1
+debug1: key_load_public: No such file or directory
+debug1: identity file /home/corerain/.ssh/id_dsa-cert type -1
+debug1: key_load_public: No such file or directory
+debug1: identity file /home/corerain/.ssh/id_ecdsa type -1
+debug1: key_load_public: No such file or directory
+debug1: identity file /home/corerain/.ssh/id_ecdsa-cert type -1
+debug1: key_load_public: No such file or directory
+debug1: identity file /home/corerain/.ssh/id_ed25519 type -1
+debug1: key_load_public: No such file or directory
+debug1: identity file /home/corerain/.ssh/id_ed25519-cert type -1
+debug1: Local version string SSH-2.0-OpenSSH_7.6p1 Ubuntu-4ubuntu0.5
+ssh_exchange_identification: Connection closed by remote host
+```
+
+可以参考这篇文章解决：https://blog.csdn.net/seymourde/article/details/108449673
+
 
 
 ## 参考
