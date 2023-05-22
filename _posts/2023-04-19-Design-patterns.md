@@ -33,6 +33,371 @@ UML 类图中常用的符号和表示说明如下：
 
 ## 创建型
 
+### 工厂模式
+
+**工厂方法模式**是一种创建型设计模式， 其在父类中提供一个创建对象的方法， 允许子类决定实例化对象的类型。
+
+工厂方法模式的优点：
+
+- 可以是创建者与具体产品之间解耦；
+- 单一职责原则。可以将产品创建代码放在程序的单一位置，从而使得代码更容易维护；
+- 开闭原则。无需更改现有客户端代码，就可以在程序中引入新的产品类型。
+
+缺点：
+
+- 应用工厂方法模式需要引入许多新的子类， 代码可能会因此变得更复杂。 最好的情况是将该模式引入创建者类的现有层次结构中。
+
+**使用示例：**工厂方法模式在C++代码中得到了广泛的使用。当你需要在代码中提供高层次的灵活性时，该模式会非常实用。
+
+**识别方法：**工厂方法可通过构建方法来识别，他会创建具体类的对象，但以抽象类型或者接口的形式返回这些对象。
+
+**代码实例：**
+
+```c++
+#include <iostream>
+using namespace std;
+
+/**
+ * The Product interface declares the operations that all concrete products must
+ * implement.
+ */
+
+class Product {
+ public:
+  virtual ~Product() {}
+  virtual std::string Operation() const = 0;
+};
+
+/**
+ * Concrete Products provide various implementations of the Product interface.
+ */
+class ConcreteProduct1 : public Product {
+ public:
+  std::string Operation() const override {
+    return "{Result of the ConcreteProduct1}";
+  }
+};
+class ConcreteProduct2 : public Product {
+ public:
+  std::string Operation() const override {
+    return "{Result of the ConcreteProduct2}";
+  }
+};
+
+/**
+ * The Creator class declares the factory method that is supposed to return an
+ * object of a Product class. The Creator's subclasses usually provide the
+ * implementation of this method.
+ */
+
+class Creator {
+  /**
+   * Note that the Creator may also provide some default implementation of the
+   * factory method.
+   */
+ public:
+  virtual ~Creator(){};
+  virtual Product* FactoryMethod() const = 0;
+  /**
+   * Also note that, despite its name, the Creator's primary responsibility is
+   * not creating products. Usually, it contains some core business logic that
+   * relies on Product objects, returned by the factory method. Subclasses can
+   * indirectly change that business logic by overriding the factory method and
+   * returning a different type of product from it.
+   */
+
+  std::string SomeOperation() const {
+    // Call the factory method to create a Product object.
+    Product* product = this->FactoryMethod();
+    // Now, use the product.
+    std::string result = "Creator: The same creator's code has just worked with " + product->Operation();
+    delete product;
+    return result;
+  }
+};
+
+/**
+ * Concrete Creators override the factory method in order to change the
+ * resulting product's type.
+ */
+class ConcreteCreator1 : public Creator {
+  /**
+   * Note that the signature of the method still uses the abstract product type,
+   * even though the concrete product is actually returned from the method. This
+   * way the Creator can stay independent of concrete product classes.
+   */
+ public:
+  Product* FactoryMethod() const override {
+    return new ConcreteProduct1();
+  }
+};
+
+class ConcreteCreator2 : public Creator {
+ public:
+  Product* FactoryMethod() const override {
+    return new ConcreteProduct2();
+  }
+};
+
+/**
+ * The client code works with an instance of a concrete creator, albeit through
+ * its base interface. As long as the client keeps working with the creator via
+ * the base interface, you can pass it any creator's subclass.
+ */
+void ClientCode(const Creator& creator) {
+  // ...
+  std::cout << "Client: I'm not aware of the creator's class, but it still works.\n"
+            << creator.SomeOperation() << std::endl;
+  // ...
+}
+
+/**
+ * The Application picks a creator's type depending on the configuration or
+ * environment.
+ */
+
+int main() {
+  std::cout << "App: Launched with the ConcreteCreator1.\n";
+  Creator* creator = new ConcreteCreator1();
+  ClientCode(*creator);
+  std::cout << std::endl;
+  std::cout << "App: Launched with the ConcreteCreator2.\n";
+  Creator* creator2 = new ConcreteCreator2();
+  ClientCode(*creator2);
+
+  delete creator;
+  delete creator2;
+  return 0;
+}
+```
+
+输出结果：
+
+```shell
+App: Launched with the ConcreteCreator1.
+Client: I'm not aware of the creator's class, but it still works.
+Creator: The same creator's code has just worked with {Result of the ConcreteProduct1}
+
+App: Launched with the ConcreteCreator2.
+Client: I'm not aware of the creator's class, but it still works.
+Creator: The same creator's code has just worked with {Result of the ConcreteProduct2}
+```
+
+### 抽象工厂模式
+
+**抽象工厂模式**是一种创建型设计模式， 它能创建一系列相关的对象， 而无需指定其具体类。
+
+抽象工厂定义了用于创建不同产品的接口， 但将实际的创建工作留给了具体工厂类。 每个工厂类型都对应一个特定的产品变体。
+
+在创建产品时， 客户端代码调用的是工厂对象的构建方法， 而不是直接调用构造函数 （ `new`操作符）。 由于一个工厂对应一种产品变体， 因此它创建的所有产品都可相互兼容。
+
+客户端代码仅通过其抽象接口与工厂和产品进行交互。 该接口允许同一客户端代码与不同产品进行交互。 你只需创建一个具体工厂类并将其传递给客户端代码即可。
+
+**抽象工程模式适用场景：**
+
+-  如果代码需要与多个不同系列的相关产品交互， 但是由于无法提前获取相关信息， 或者出于对未来扩展性的考虑，你不希望代码基于产品的具体类进行构建，在这种情况下，你可以使用抽象工厂。
+- 抽象工厂为你提供了一个接口， 可用于创建每个系列产品的对象。 只要代码通过该接口创建对象， 那么你就不会生成与应用程序已生成的产品类型不一致的产品。
+- 如果你有一个基于一组[抽象方法](https://refactoringguru.cn/design-patterns/factory-method)的类，且其主要功能因此变得不明确， 那么在这种情况下可以考虑使用抽象工厂模式。
+- 在设计良好的程序中， *每个类仅负责一件事*。 如果一个类与多种类型产品交互， 就可以考虑将工厂方法抽取到独立的工厂类或具备完整功能的抽象工厂类中。
+
+**实现方式：**
+
+1. 以不同弄的产品类型与产品变体为维度绘制矩阵；
+2. 为所有产品声明抽象产品接口。然后让所有的具体产品类实现这些接口；
+3. 声明抽象工厂接口，并且在接口中为所有抽象产品提供一组构建方法；
+4. 为每种产品变体实一个具体工厂类；
+5. 在应用程序中开发初始化代码。改代码根据具体应用程序配置或根据当前环境，对特定具体工厂类进行初始化。然后将该工厂对象传递给所有需要创建产品的类。
+6. 找出代码中所有对产品构造函数的直接调用，将其替换为对工厂对象中相应的构建方法的调用。
+
+**抽象工厂模式的优点：**
+
+- 可以确保同一工厂生成的产品相互匹配；
+- 可以实现客户端与具体产品解耦；
+- 单一职责原则。可以将产品创建代码放在程序的单一位置，从而使得代码更容易维护；
+- 开闭原则。无需更改现有客户端代码，就可以在程序中引入新的产品类型。
+
+**缺点：**
+
+- 由于采用该模式需要向应用中引入众多接口和类， 代码可能会比之前更加复杂。
+
+**使用示例：** 抽象工厂模式在 C++ 代码中很常见。 许多框架和程序库会将它作为扩展和自定义其标准组件的一种方式。
+
+**识别方法：** 我们可以通过方法来识别该模式——其会返回一个工厂对象。 接下来， 工厂将被用于创建特定的子组件。
+
+**代码示例：**
+
+```c++
+#include <iostream>
+using namespace std;
+
+/**
+ * Each distinct product of a product family should have a base interface. All
+ * variants of the product must implement this interface.
+ */
+class AbstractProductA {
+ public:
+  virtual ~AbstractProductA(){};
+  virtual std::string UsefulFunctionA() const = 0;
+};
+
+/**
+ * Concrete Products are created by corresponding Concrete Factories.
+ */
+class ConcreteProductA1 : public AbstractProductA {
+ public:
+  std::string UsefulFunctionA() const override {
+    return "The result of the product A1.";
+  }
+};
+
+class ConcreteProductA2 : public AbstractProductA {
+  std::string UsefulFunctionA() const override {
+    return "The result of the product A2.";
+  }
+};
+
+/**
+ * Here's the the base interface of another product. All products can interact
+ * with each other, but proper interaction is possible only between products of
+ * the same concrete variant.
+ */
+class AbstractProductB {
+  /**
+   * Product B is able to do its own thing...
+   */
+ public:
+  virtual ~AbstractProductB(){};
+  virtual std::string UsefulFunctionB() const = 0;
+  /**
+   * ...but it also can collaborate with the ProductA.
+   *
+   * The Abstract Factory makes sure that all products it creates are of the
+   * same variant and thus, compatible.
+   */
+  virtual std::string AnotherUsefulFunctionB(const AbstractProductA &collaborator) const = 0;
+};
+
+/**
+ * Concrete Products are created by corresponding Concrete Factories.
+ */
+class ConcreteProductB1 : public AbstractProductB {
+ public:
+  std::string UsefulFunctionB() const override {
+    return "The result of the product B1.";
+  }
+  /**
+   * The variant, Product B1, is only able to work correctly with the variant,
+   * Product A1. Nevertheless, it accepts any instance of AbstractProductA as an
+   * argument.
+   */
+  std::string AnotherUsefulFunctionB(const AbstractProductA &collaborator) const override {
+    const std::string result = collaborator.UsefulFunctionA();
+    return "The result of the B1 collaborating with ( " + result + " )";
+  }
+};
+
+class ConcreteProductB2 : public AbstractProductB {
+ public:
+  std::string UsefulFunctionB() const override {
+    return "The result of the product B2.";
+  }
+  /**
+   * The variant, Product B2, is only able to work correctly with the variant,
+   * Product A2. Nevertheless, it accepts any instance of AbstractProductA as an
+   * argument.
+   */
+  std::string AnotherUsefulFunctionB(const AbstractProductA &collaborator) const override {
+    const std::string result = collaborator.UsefulFunctionA();
+    return "The result of the B2 collaborating with ( " + result + " )";
+  }
+};
+
+/**
+ * The Abstract Factory interface declares a set of methods that return
+ * different abstract products. These products are called a family and are
+ * related by a high-level theme or concept. Products of one family are usually
+ * able to collaborate among themselves. A family of products may have several
+ * variants, but the products of one variant are incompatible with products of
+ * another.
+ */
+class AbstractFactory {
+ public:
+  virtual AbstractProductA *CreateProductA() const = 0;
+  virtual AbstractProductB *CreateProductB() const = 0;
+};
+
+/**
+ * Concrete Factories produce a family of products that belong to a single
+ * variant. The factory guarantees that resulting products are compatible. Note
+ * that signatures of the Concrete Factory's methods return an abstract product,
+ * while inside the method a concrete product is instantiated.
+ */
+class ConcreteFactory1 : public AbstractFactory {
+ public:
+  AbstractProductA *CreateProductA() const override {
+    return new ConcreteProductA1();
+  }
+  AbstractProductB *CreateProductB() const override {
+    return new ConcreteProductB1();
+  }
+};
+
+/**
+ * Each Concrete Factory has a corresponding product variant.
+ */
+class ConcreteFactory2 : public AbstractFactory {
+ public:
+  AbstractProductA *CreateProductA() const override {
+    return new ConcreteProductA2();
+  }
+  AbstractProductB *CreateProductB() const override {
+    return new ConcreteProductB2();
+  }
+};
+
+/**
+ * The client code works with factories and products only through abstract
+ * types: AbstractFactory and AbstractProduct. This lets you pass any factory or
+ * product subclass to the client code without breaking it.
+ */
+
+void ClientCode(const AbstractFactory &factory) {
+  const AbstractProductA *product_a = factory.CreateProductA();
+  const AbstractProductB *product_b = factory.CreateProductB();
+  std::cout << product_b->UsefulFunctionB() << "\n";
+  std::cout << product_b->AnotherUsefulFunctionB(*product_a) << "\n";
+  delete product_a;
+  delete product_b;
+}
+
+int main() {
+  std::cout << "Client: Testing client code with the first factory type:\n";
+  ConcreteFactory1 *f1 = new ConcreteFactory1();
+  ClientCode(*f1);
+  delete f1;
+  std::cout << std::endl;
+  std::cout << "Client: Testing the same client code with the second factory type:\n";
+  ConcreteFactory2 *f2 = new ConcreteFactory2();
+  ClientCode(*f2);
+  delete f2;
+  return 0;
+}
+```
+
+输出结果：
+
+```shell
+Client: Testing client code with the first factory type:
+The result of the product B1.
+The result of the B1 collaborating with ( The result of the product A1. )
+
+Client: Testing the same client code with the second factory type:
+The result of the product B2.
+The result of the B2 collaborating with ( The result of the product A2. )
+```
+
+
+
 ### 生成器模式
 
 也叫建造者模式、Builder
