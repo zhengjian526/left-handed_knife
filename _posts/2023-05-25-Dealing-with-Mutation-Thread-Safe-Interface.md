@@ -198,15 +198,68 @@ private:
 
 在上面代码中，`Critical`类有一个静态成员变量`called`(1)，该成员变量用来计数实现函数被调用的次数。`Critical`类的所有实例使用相同的静态成员，因此必须进行同步。从c++ 17开始，静态数据成员可以内联声明。内联静态数据成员可以在类定义中定义和初始化。
 
+### 虚拟性
 
+当您重写虚接口函数时，即使该函数是私有的，重写的函数也应该具有锁。
 
+```c++
+// threadSafeInterfaceVirtual.cpp
 
+#include <iostream>
+#include <mutex>
+#include <thread>
 
+class Base{
+    
+public:
+    virtual void interface() {
+        std::lock_guard<std::mutex> lockGuard(mut);
+        std::cout << "Base with lock" << '\n';
+    }
+    virtual ~Base() = default;
+private:
+    std::mutex mut;
+};
 
+class Derived: public Base{
 
+    void interface() override {
+        std::cout << "Derived without lock" << '\n';
+    }
 
+};
 
-![cpp_0006](/images/posts/c++/cpp_0006.png)
+int main(){
+
+    std::cout << '\n';
+
+    Base* base1 = new Derived;
+    base1->interface();
+
+    Derived der;
+    Base& base2 = der;
+    base2.interface();
+
+    std::cout << '\n';
+
+}
+```
+
+在调用中，`base1->interface`和`base2.interface`表示`base1`和`base2`的静态类型是`Base`，因此接口是可访问的。因为接口成员函数是虚的，所以调用在运行时使用动态类型Derived进行。最后，调用派生类的私有成员函数接口。
+
+```shell
+
+Derived without lock
+Derived without lock
+
+```
+
+有两种典型的方法可以克服这个问题。
+
+1. 将成员函数接口设置为非虚成员函数。这种技术被称为NVI(非虚拟接口)。非虚成员函数保证使用基类base的接口函数。此外，使用override重写接口函数会导致编译时错误，因为没有什么可重写的。
+2. 将成员函数interface声明为final: `virtual void interface() final`，由于final，重写final声明的虚成员函数会导致编译时错误。
+
+尽管我提出了克服虚拟挑战的两种方法，但我强烈建议使用NVI习语。如果不需要后期绑定(虚拟)，可以使用早期绑定。你可以在我的文章 [The Template Method](https://www.modernescpp.com/index.php/the-template-method) 中阅读更多关于NVI的内容。
 
 # 参考
 
