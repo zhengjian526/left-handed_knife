@@ -33,6 +33,323 @@ UML 类图中常用的符号和表示说明如下：
 
 ## 创建型
 
+### 单例模式
+
+**单例模式**是一种创建型设计模式， 让你能够保证一个类只有一个实例， 并提供一个访问该实例的全局节点。单例拥有与全局变量相同的优缺点。 尽管它们非常有用， 但却会破坏代码的模块化特性。
+
+在某些其他上下文中， 你不能使用依赖于单例的类。 你也将必须使用单例类。 绝大多数情况下， 该限制会在创建单元测试时出现。
+
+#### 单例模式分类
+
+单例模式可以分为**懒汉式**和**饿汉式**，两者之间的区别在于**创建实例的时间不同**：
+
+- **懒汉式**：指系统运行中，实例并不存在，只有当需要使用该实例时，才会去创建并使用实例。**（这种方式要考虑线程安全）**
+- **饿汉式**：指系统一运行，就初始化创建实例，当需要时，直接调用即可。**（本身就线程安全，没有多线程的问题）**
+
+#### **适用场景：**
+
+-  **如果程序中的某个类对于所有客户端只有一个可用的实例， 可以使用单例模式。**
+- 单例模式禁止通过除特殊构建方法以外的任何方式来创建自身类的对象。 该方法可以创建一个新对象， 但如果该对象已经被创建， 则返回已有的对象。
+- **如果你需要更加严格地控制全局变量，可以使用单例模式。**
+
+#### 实现方式
+
+1. 在类中添加一个私有静态成员变量用于保存单例实例。
+2. 声明一个公有静态构建方法用于获取单例实例。
+3. 在静态方法中实现"延迟初始化"。 该方法会在首次被调用时创建一个新对象， 并将其存储在静态成员变量中。 此后该方法每次被调用时都返回该实例。
+4. 将类的构造函数设为私有。 类的静态方法仍能调用构造函数， 但是其他对象不能调用。
+5. 检查客户端代码， 将对单例的构造函数的调用替换为对其静态构建方法的调用。
+
+#### 优缺点
+
+优点：
+
+- 你可以保证一个类只有一个实例。
+-  你获得了一个指向该实例的全局访问节点。
+-  仅在首次请求单例对象时对其进行初始化。
+
+缺点：
+
+- 违反了*单一职责原则*。 该模式同时解决了两个问题。
+-  单例模式可能掩盖不良设计， 比如程序各组件之间相互了解过多等。
+-  该模式在多线程环境下需要进行特殊处理， 避免多个线程多次创建单例对象。
+-  单例的客户端代码单元测试可能会比较困难， 因为许多测试框架以基于继承的方式创建模拟对象。 由于单例类的构造函数是私有的， 而且绝大部分语言无法重写静态方法， 所以你需要想出仔细考虑模拟单例的方法。 要么干脆不编写测试代码， 或者不使用单例模式。
+
+#### 线程安全
+
+本文仅介绍C++11以后线程安全的实现方法。
+
+- **内部静态变量的懒汉单例（local static）**
+
+```c++
+#include <iostream> // std::cout
+#include <pthread.h> // pthread_create
+///////////////////  内部静态变量的懒汉实现  //////////////////
+class Single
+{
+
+public:
+    // 获取单实例对象
+    static Single &GetInstance();
+	
+	// 打印实例地址
+    void Print();
+
+private:
+    // 禁止外部构造
+    Single();
+
+    // 禁止外部析构
+    ~Single();
+
+    // 禁止外部复制构造
+    Single(const Single &signal);
+
+    // 禁止外部赋值操作
+    const Single &operator=(const Single &signal);
+};
+
+Single &Single::GetInstance()
+{
+    // 局部静态特性的方式实现单实例
+    static Single signal;
+    return signal;
+}
+
+void Single::Print()
+{
+	std::cout << "我的实例内存地址是:" << this << std::endl;
+}
+
+Single::Single()
+{
+    std::cout << "构造函数" << std::endl;
+}
+
+Single::~Single()
+{
+    std::cout << "析构函数" << std::endl;
+}
+///////////////////  内部静态变量的懒汉实现  //////////////////
+// 线程函数
+void *PrintHello(void *threadid)
+{
+    // 主线程与子线程分离，两者相互不干涉，子线程结束同时子线程的资源自动回收
+    pthread_detach(pthread_self());
+
+    // 对传入的参数进行强制类型转换，由无类型指针变为整形数指针，然后再读取
+    int tid = *((int *)threadid);
+
+    std::cout << "Hi, 我是线程 ID:[" << tid << "]" << std::endl;
+
+    // 打印实例地址
+    Single::GetInstance().Print();
+
+    pthread_exit(NULL);
+}
+#define NUM_THREADS 5 // 线程个数
+
+int main(void)
+{
+    pthread_t threads[NUM_THREADS] = {0};
+    int indexes[NUM_THREADS] = {0}; // 用数组来保存i的值
+
+    int ret = 0;
+    int i = 0;
+
+    std::cout << "main() : 开始 ... " << std::endl;
+
+    for (i = 0; i < NUM_THREADS; i++)
+    {
+        std::cout << "main() : 创建线程:[" << i << "]" << std::endl;
+        
+		indexes[i] = i; //先保存i的值
+		
+        // 传入的时候必须强制转换为void* 类型，即无类型指针
+        ret = pthread_create(&threads[i], NULL, PrintHello, (void *)&(indexes[i]));
+        if (ret)
+        {
+            std::cout << "Error:无法创建线程," << ret << std::endl;
+            exit(-1);
+        }
+    }
+
+    std::cout << "main() : 结束! " << std::endl;
+	
+    return 0;
+}
+```
+
+输出：
+
+```shell
+main() : 开始 ... 
+main() : 创建线程:[0]
+main() : 创建线程:[1]
+Hi, 我是线程 ID:[0]
+构造函数
+Hi, 我是线程 ID:[我的实例内存地址是:1]
+我的实例内存地址是:0x5642d634b139
+main() : 创建线程:[0x2]
+0x5642d634b139
+main() : 创建线程:[3]
+Hi, 我是线程 ID:[2]
+我的实例内存地址是:0x5642d634b139
+Hi, 我是线程 ID:[3]
+我的实例内存地址是:0x5642d634b139
+main() : 创建线程:[4]
+main() : 结束! 
+析构函数
+Hi, 我是线程 ID:[4]
+Hi, 我是线程 ID:[4]
+我的实例内存地址是:0x5642d634b139
+```
+
+`-std=c++0x`编译是使用了C++11的特性，在C++11内部静态变量的方式里是线程安全的，只创建了一次实例。这个方式非常推荐，实现的代码最少！
+
+- **饿汉式单例 （本身就线程安全）**
+
+```c++
+#include <iostream> // std::cout
+#include <pthread.h> // pthread_create
+////////////////////////// 饿汉实现 /////////////////////
+class Singleton
+{
+public:
+    // 获取单实例
+    static Singleton* GetInstance();
+
+    // 释放单实例，进程退出时调用
+    static void deleteInstance();
+    
+    // 打印实例地址
+    void Print();
+
+private:
+    // 将其构造和析构成为私有的, 禁止外部构造和析构
+    Singleton();
+    ~Singleton();
+
+    // 将其拷贝构造和赋值构造成为私有函数, 禁止外部拷贝和赋值
+    Singleton(const Singleton &signal);
+    const Singleton &operator=(const Singleton &signal);
+
+private:
+    // 唯一单实例对象指针
+    static Singleton *g_pSingleton;
+};
+
+// 代码一运行就初始化创建实例 ，本身就线程安全
+Singleton* Singleton::g_pSingleton = new (std::nothrow) Singleton;
+
+Singleton* Singleton::GetInstance()
+{
+    return g_pSingleton;
+}
+
+void Singleton::deleteInstance()
+{
+    if (g_pSingleton)
+    {
+        delete g_pSingleton;
+        g_pSingleton = NULL;
+    }
+}
+
+void Singleton::Print()
+{
+    std::cout << "我的实例内存地址是:" << this << std::endl;
+}
+
+Singleton::Singleton()
+{
+    std::cout << "构造函数" << std::endl;
+}
+
+Singleton::~Singleton()
+{
+    std::cout << "析构函数" << std::endl;
+}
+////////////////////////// 饿汉实现 /////////////////////
+
+// 线程函数
+void *PrintHello(void *threadid)
+{
+    // 主线程与子线程分离，两者相互不干涉，子线程结束同时子线程的资源自动回收
+    pthread_detach(pthread_self());
+
+    // 对传入的参数进行强制类型转换，由无类型指针变为整形数指针，然后再读取
+    int tid = *((int *)threadid);
+
+    std::cout << "Hi, 我是线程 ID:[" << tid << "]" << std::endl;
+
+    // 打印实例地址
+    Singleton::GetInstance()->Print();
+
+    pthread_exit(NULL);
+}
+#define NUM_THREADS 5 // 线程个数
+
+int main(void)
+{
+    pthread_t threads[NUM_THREADS] = {0};
+    int indexes[NUM_THREADS] = {0}; // 用数组来保存i的值
+
+    int ret = 0;
+    int i = 0;
+
+    std::cout << "main() : 开始 ... " << std::endl;
+
+    for (i = 0; i < NUM_THREADS; i++)
+    {
+        std::cout << "main() : 创建线程:[" << i << "]" << std::endl;
+        
+		indexes[i] = i; //先保存i的值
+		
+        // 传入的时候必须强制转换为void* 类型，即无类型指针
+        ret = pthread_create(&threads[i], NULL, PrintHello, (void *)&(indexes[i]));
+        if (ret)
+        {
+            std::cout << "Error:无法创建线程," << ret << std::endl;
+            exit(-1);
+        }
+    }
+
+    // 手动释放单实例的资源
+    Singleton::deleteInstance();
+    std::cout << "main() : 结束! " << std::endl;
+	
+    return 0;
+}
+```
+
+```shell
+构造函数
+main() : 开始 ... 
+main() : 创建线程:[0]
+main() : 创建线程:[1]
+main() : 创建线程:[2]
+Hi, 我是线程 ID:[Hi, 我是线程 ID:[10]]
+我的实例内存地址是:0x5592119dee70
+
+我的实例内存地址是:0x5592119dee70
+Hi, 我是线程 ID:[2]
+我的实例内存地址是:0x5592119dee70
+main() : 创建线程:[3]
+main() : 创建线程:[4]
+Hi, 我是线程 ID:[3]
+我的实例内存地址是:析构函数0x5592119dee70
+main() : 结束! 
+
+Hi, 我是线程 ID:[4]
+我的实例内存地址是:0
+```
+
+从输出可以看出，饿汉式在程序一开始就构造函数初始化了，所以本身就线程安全的。
+
+- 懒汉式是以时间换空间，适应于访问量较**小**时；推荐使用**内部静态变量的懒汉单例**，代码量少
+- 饿汉式是以空间换时间，适应于访问量较**大**时，或者线程比较多的的情况
+
 ### 工厂模式
 
 **工厂方法模式**是一种创建型设计模式， 其在父类中提供一个创建对象的方法， 允许子类决定实例化对象的类型。
@@ -1422,3 +1739,4 @@ edcba
 
 - https://refactoringguru.cn/design-patterns
 - 祁宇 <<深入应用C++11：代码优化与工程级应用>>
+- https://www.cnblogs.com/xiaolincoding/p/11437231.html
