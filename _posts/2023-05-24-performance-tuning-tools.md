@@ -240,6 +240,79 @@ dot -Tpng test_0524.0001.dot -o test_0524.0001.png
 
 关于gperftools更多功能和使用方式请参考 https://github.com/gperftools/gperftools。
 
+
+
+# 2.Valgrind Massif内存堆栈分析工具及其可视化工具
+
+之前一直使用valgrind定位C++程序内存泄漏和越界问题，最近项目需要分析软件系统内存占用情况，了解到valgrind可以对内存堆栈的申请占用进行采样分析，在ubuntu的桌面版下还可以使用可视化工具直观的查看内存消耗和调用栈。
+
+需要先说明的是，valgrind是通过定期采样内存数据生成内存数据文件的，所以数据展示的是某个时刻程序中内存占用情况。先来看一张效果图：
+
+![perf_tools_0004](/images/posts/perf_tools/perf_tools_0004.png)
+
+Valgrind工具的安装等不在此说明。
+
+## Massif命令行选项
+
+Massif工具的官网介绍可以参考：http://valgrind.org/docs/manual/ms-manual.html
+
+这里对常用的选项进行说明：
+
+```shell
+ user options for Massif:
+    --heap=no|yes             profile heap blocks [yes]
+    --heap-admin=<size>       average admin bytes per heap block;
+                               ignored if --heap=no [8]
+    --stacks=no|yes           profile stack(s) [no]
+    --pages-as-heap=no|yes    profile memory at the page level [no]
+    --depth=<number>          depth of contexts [30]
+    --alloc-fn=<name>         specify <name> as an alloc function [empty]
+    --ignore-fn=<name>        ignore heap allocations within <name> [empty]
+    --threshold=<m.n>         significance threshold, as a percentage [1.0]
+    --peak-inaccuracy=<m.n>   maximum peak inaccuracy, as a percentage [1.0]
+    --time-unit=i|ms|B        time unit: instructions executed, milliseconds
+                              or heap bytes alloc'd/dealloc'd [i]
+    --detailed-freq=<N>       every Nth snapshot should be detailed [10]
+    --max-snapshots=<N>       maximum number of snapshots recorded [100]
+    --massif-out-file=<file>  output file name [massif.out.%p]
+```
+
+## 数据采集
+
+```shell
+algrind -v --tool=massif --time-unit=B --detailed-freq=1 --massif-out-file=./massif.out  ./test_corofile
+```
+
+运行一段时间后 可以使用kill + pid的方式停止程序，不要使用 kill -9 + pid的方式，可能会导致采样失败。
+
+运行结束后会在当前文件夹生成`massif.out`文件。程序运行的环境可能为无界面的服务器，这个数据分析文件也可以在不同的机器环境中进行分析，可以使用虚拟机安装ubuntu桌面版，在进行可视化分析。
+
+## ms_print 分析采样文件
+
+文本输出可以使用ms_print命令：
+
+```shell
+ms_print ./massif.out
+```
+
+## massif-visualizer 可视化分析采样文件
+
+使用ms_print文本输出不够直观，可以在ubuntu桌面版安装**massif-visualizer**:
+
+```shell
+sudo apt install massif-visualizer
+```
+
+**双击 massif-visualizer 启动软件之后，打开并选中某个 massif.out 文件**，或者用命令行的方式打开：
+
+```shell
+massif-visualizer ./massif.out
+```
+
+界面上可以清晰直观的看到内存使用变化、调用栈等数据，点击界面下面的 **Allocators** 按钮之后，可以看到内存分配的排行榜。
+
+
+
 # 参考
 
 - https://xusenqi.site/2020/12/06/C++Profile%E7%9A%84%E5%A4%A7%E6%9D%80%E5%99%A8_gperftools%E7%9A%84%E4%BD%BF%E7%94%A8/
@@ -247,3 +320,4 @@ dot -Tpng test_0524.0001.dot -o test_0524.0001.png
 - https://github.com/gperftools/gperftools
 - https://github.com/gperftools/gperftools/wiki
 - https://www.cnblogs.com/gary-guo/p/10607514.html
+- https://blog.csdn.net/u013051748/article/details/108396621
