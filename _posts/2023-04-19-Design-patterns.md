@@ -955,6 +955,157 @@ Product parts: PartA1, PartC
 
 ## 结构型
 
+### 代理模式
+
+**代理**是一种结构型设计模式， 让你能提供真实服务对象的替代品给客户端使用。 代理接收客户端的请求并进行一些处理 （访问控制和缓存等）， 然后再将请求传递给服务对象。
+
+**代理对象拥有和服务对象相同的接口**， 这使得当其被传递给客户端时可与真实对象互换。
+
+**应用场景：**
+
+- **延迟初始化 （虚拟代理）**。如果你有一个偶尔使用的重量级服务对象，一直保持该对象运行会消耗系统资源时，可使用代理模式。你无需在程序启动时就创建该对象， 可将对象的初始化延迟到真正有需要的时候。
+- **访问控制 （保护代理）**。 如果你只希望特定客户端使用服务对象， 这里的对象可以是操作系统中非常重要的部分， 而客户端则是各种已启动的程序 （包括恶意程序）， 此时可使用代理模式。
+-  **本地执行远程服务 （远程代理）。** 适用于服务对象位于远程服务器上的情形。
+-  **记录日志请求 （日志记录代理）**。适用于当你需要保存对于服务对象的请求历史记录时。
+-  **缓存请求结果 （缓存代理）。** 适用于需要缓存客户请求结果并对缓存生命周期进行管理时， 特别是当返回结果的体积非常大时。
+- **智能引用。** 可在没有客户端使用某个重量级对象时立即销毁该对象。代理会将所有获取了指向服务对象或其结果的客户端记录在案。 代理会时不时地遍历各个客户端， 检查它们是否仍在运行。 如果相应的客户端列表为空， 代理就会销毁该服务对象， 释放底层系统资源。
+
+**实现方式**
+
+1. 如果没有现成的服务接口， 你就需要创建一个接口来实现代理和服务对象的可交换性。 从服务类中抽取接口并非总是可行的， 因为你需要对服务的所有客户端进行修改， 让它们使用接口。 备选计划是将代理作为服务类的子类， 这样代理就能继承服务的所有接口了。
+2. 创建代理类， 其中必须包含一个存储指向服务的引用的成员变量。 通常情况下， 代理负责创建服务并对其整个生命周期进行管理。 在一些特殊情况下， 客户端会通过构造函数将服务传递给代理。
+3. 根据需求实现代理方法。 在大部分情况下， 代理在完成一些任务后应将工作委派给服务对象。
+4. 可以考虑新建一个构建方法来判断客户端可获取的是代理还是实际服务。 你可以在代理类中创建一个简单的静态方法， 也可以创建一个完整的工厂方法。
+5. 可以考虑为服务对象实现延迟初始化。
+
+**代理模式优缺点**
+
+优点：
+
+- 你可以在客户端毫无察觉的情况下控制服务对象。
+-  如果客户端对服务对象的生命周期没有特殊要求， 你可以对生命周期进行管理。
+-  即使服务对象还未准备好或不存在， 代理也可以正常工作。
+- 开闭原则。 你可以在不对服务或客户端做出修改的情况下创建新代理。
+
+缺点：
+
+- 代码可能会变得复杂， 因为需要新建许多类。
+-  服务响应可能会延迟。
+
+**使用示例：** 尽管代理模式在绝大多数 C++ 程序中并不常见， 但它在一些特殊情况下仍然非常方便。 当你希望在无需修改客户代码的前提下于已有类的对象上增加额外行为时， 该模式是无可替代的。
+
+**识别方法：** 代理模式会将所有实际工作委派给一些其他对象。 除非代理是某个服务的子类， 否则每个代理方法最后都应该引用一个服务对象。
+
+**代码示例：**
+
+```c++
+#include <iostream>
+/**
+ * The Subject interface declares common operations for both RealSubject and the
+ * Proxy. As long as the client works with RealSubject using this interface,
+ * you'll be able to pass it a proxy instead of a real subject.
+ */
+class Subject {
+ public:
+  virtual void Request() const = 0;
+};
+/**
+ * The RealSubject contains some core business logic. Usually, RealSubjects are
+ * capable of doing some useful work which may also be very slow or sensitive -
+ * e.g. correcting input data. A Proxy can solve these issues without any
+ * changes to the RealSubject's code.
+ */
+class RealSubject : public Subject {
+ public:
+  void Request() const override {
+    std::cout << "RealSubject: Handling request.\n";
+  }
+};
+/**
+ * The Proxy has an interface identical to the RealSubject.
+ */
+class Proxy : public Subject {
+  /**
+   * @var RealSubject
+   */
+ private:
+  RealSubject *real_subject_;
+
+  bool CheckAccess() const {
+    // Some real checks should go here.
+    std::cout << "Proxy: Checking access prior to firing a real request.\n";
+    return true;
+  }
+  void LogAccess() const {
+    std::cout << "Proxy: Logging the time of request.\n";
+  }
+
+  /**
+   * The Proxy maintains a reference to an object of the RealSubject class. It
+   * can be either lazy-loaded or passed to the Proxy by the client.
+   */
+ public:
+  Proxy(RealSubject *real_subject) : real_subject_(new RealSubject(*real_subject)) {
+  }
+
+  ~Proxy() {
+    delete real_subject_;
+  }
+  /**
+   * The most common applications of the Proxy pattern are lazy loading,
+   * caching, controlling the access, logging, etc. A Proxy can perform one of
+   * these things and then, depending on the result, pass the execution to the
+   * same method in a linked RealSubject object.
+   */
+  void Request() const override {
+    if (this->CheckAccess()) {
+      this->real_subject_->Request();
+      this->LogAccess();
+    }
+  }
+};
+/**
+ * The client code is supposed to work with all objects (both subjects and
+ * proxies) via the Subject interface in order to support both real subjects and
+ * proxies. In real life, however, clients mostly work with their real subjects
+ * directly. In this case, to implement the pattern more easily, you can extend
+ * your proxy from the real subject's class.
+ */
+void ClientCode(const Subject &subject) {
+  // ...
+  subject.Request();
+  // ...
+}
+
+int main() {
+  std::cout << "Client: Executing the client code with a real subject:\n";
+  RealSubject *real_subject = new RealSubject;
+  ClientCode(*real_subject);
+  std::cout << "\n";
+  std::cout << "Client: Executing the same client code with a proxy:\n";
+  Proxy *proxy = new Proxy(real_subject);
+  ClientCode(*proxy);
+
+  delete real_subject;
+  delete proxy;
+  return 0;
+}
+```
+
+输出结果：
+
+```shell
+Client: Executing the client code with a real subject:
+RealSubject: Handling request.
+
+Client: Executing the same client code with a proxy:
+Proxy: Checking access prior to firing a real request.
+RealSubject: Handling request.
+Proxy: Logging the time of request.
+```
+
+
+
 ### 适配器模式
 
 **适配器**是一种结构型设计模式， 它能使不兼容的对象能够相互合作。适配器可担任两个对象间的封装器， 它会接收对于一个对象的调用， 并将其转换为另一个对象可识别的格式和接口。
