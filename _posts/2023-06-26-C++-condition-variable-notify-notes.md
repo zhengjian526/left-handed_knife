@@ -220,8 +220,36 @@ int main(int argc, char* argv[])
 
 ## 虚假唤醒
 
+### 虚假唤醒定义
 
+虚假唤醒的概念可以参考维基百科的定义：
 
+> A **spurious wakeup** happens when a thread wakes up from waiting on a [condition variable](https://en.wikipedia.org/wiki/Condition_variable) that's been signaled, only to discover that the condition it was waiting for isn't satisfied. It's called spurious because the thread has seemingly been awakened for no reason. But spurious wakeup don't happen for no reason: they usually happen because, in between the time when the condition variable was signaled and when the waiting thread finally ran, another thread ran and changed the condition. There was a [race condition](https://en.wikipedia.org/wiki/Race_condition) between the threads, with the typical result that sometimes, the thread waking up on the condition variable runs first, winning the race, and sometimes it runs second, losing the race.
+
+机翻一下：
+
+当线程从等待一个已经发出信号的条件变量中醒来，却发现它等待的条件没有得到满足时，就会发生虚假唤醒。它被称为虚假的，因为线程似乎是无缘无故被唤醒的。但是虚假唤醒不会无缘无故地发生:它们的发生通常是因为，在条件变量发出信号和等待线程最终运行之间，另一个线程运行并更改了条件。线程之间存在竞争条件，典型的结果是，有时，在条件变量上醒来的线程首先运行，赢得了比赛，有时它输掉了比赛，置后运行。
+
+### 情况1： 多线程等待，但是notify_one
+
+如果消费者线程是多个线程在等待，而生产者线程使用了notify_one()进行唤醒通知的话，消费者多线程之间存在竞争，竞争得到通知的线程会继续执行其他逻辑，而其他竞争失败的消费者线程则会永久阻塞等待。
+
+> 在许多系统上，特别是多处理器系统，虚假唤醒的问题会加剧，因为如果有几个线程在条件变量上等待信号，系统可能会决定将它们全部唤醒，将每个唤醒一个线程的信号()视为唤醒所有线程的广播()，从而打破信号和唤醒之间可能预期的1:1关系。[1]如果有10个线程在等待，那么只有一个线程会获胜，其他9个线程将经历虚假的唤醒。
+
+### 情况2：系统原因导致的虚假唤醒
+
+有些操作系统为了在处理内部的错误条件和竞争时具有灵活性，即使没有发出信号，也可以允许条件变量从等待中返回。
+
+> 为了在处理操作系统内部的错误条件和竞争时允许实现的灵活性，条件变量也可能被允许从等待中返回，即使没有发出信号，尽管目前尚不清楚有多少实现实际上这样做。在Solaris条件变量的实现中，如果进程是信号，则可能在没有指定条件的情况下发生虚假唤醒;wait系统调用终止并返回Inter。Linux p-thread条件变量的实现保证它不会这样做
+>
+> 因为只要存在竞争，甚至可能在没有竞争或信号的情况下都可能发生虚假唤醒，所以当线程在条件变量上唤醒时，它应该始终检查它所寻求的条件是否得到满足。如果不是，它应该返回到条件变量上休眠，等待另一个机会。
+
+# 总结
+
+- 条件变量必须搭配互斥锁使用；
+- 尽可能使用带有判断条件的条件变量形式去等待；
+- 共享变量的修改需要在持有锁，即使共享变量是原子的，也必须在互斥下修改它，以正确地发布修改到等待的线程；
+- condition_variable执行通知notify_one或者notify_all时不需要持有锁。
 
 # 参考
 
@@ -229,3 +257,4 @@ int main(int argc, char* argv[])
 - 《C++并发编程实战》第二版
 - https://blog.csdn.net/qq_39354847/article/details/126432944
 - https://www.jianshu.com/p/3721ed62742d
+- https://en.wikipedia.org/wiki/Spurious_wakeup
