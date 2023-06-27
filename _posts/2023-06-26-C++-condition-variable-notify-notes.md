@@ -246,10 +246,51 @@ int main(int argc, char* argv[])
 
 # 总结
 
+## 使用条件变量时的注意项
+
 - 条件变量必须搭配互斥锁使用；
 - 尽可能使用带有判断条件的条件变量形式去等待；
 - 共享变量的修改需要在持有锁，即使共享变量是原子的，也必须在互斥下修改它，以正确地发布修改到等待的线程；
 - condition_variable执行通知notify_one或者notify_all时不需要持有锁。
+
+## 进一步总结
+
+上述注意项可以使我们正确的使用condition_variable， 通过本人进一步的实验尝试和总结，可以让我们更清晰的了解内部实现细节，更好的理解唤醒丢失和虚假唤醒。
+
+condition_variable的wait使用有两种形式：
+
+> ```c++
+> void wait( std::unique_lock<std::mutex>& lock );    (1)	(C++11 起)
+> 
+> template< class Predicate >
+> void wait( std::unique_lock<std::mutex>& lock, Predicate pred );    (2) (C++11 起)
+> ```
+
+### 第一种使用方式说明
+
+**其中(1)的用法会先原子的解除锁，然后阻塞在当前执行线程，知道有线程执行notify_one或者notify_all时才会解除阻塞，解除阻塞时会先锁定lock并且wait退出。**
+
+对于(1)的使用方式可以看出，是必须和notify_one或者notify_all搭配使用才能解锁，这种使用方式如果生产者线程通知notify的执行顺序在消费者wait的执行顺序之前，则会出现唤醒丢失的情况
+
+### 第二种使用方式说明
+
+**第二种使用方式可以等价于：**
+
+```c
+while (!pred()) {
+    wait(lock);
+}
+```
+
+**此重载可用于在等待特定条件成为 `true` 时忽略虚假唤醒。注意进入此方法前，必须得到 `lock` ， `wait(lock)` 退出后也会重获得它，即能以 `lock` 为对 `pred()` 访问的保障。**
+
+1. 对于第二种使用方式的等价情况可以看出，首先如果生产者线程优先执行，即在消费者线程执行到`while (!pred())`之前，pred()条件已经成立，则此时消费者线程不会进入while循环内部，不会执行wait操作，所以这种情况下也就不需要notify唤醒；
+2. 如果消费者线程执行`while (!pred())`时等待的判断条件一直不成立，则消费者线程会调用`wait(lock)`进行等待，这种情况下等同于第一种使用方式，所以必须要使用notify进行唤醒。如果消费者线程在执行wait之前，生产者线程已经执行完notify，则会出现唤醒丢失的现象；
+3. 虚假唤醒则是在第二种使用方式中，收到了notify的信号通知，但是检测判断条件时发现条件不满足。这就是所谓的虚假唤醒。
+
+### 其他
+
+`notify_one()`/`notify_all()` 的效果与 `wait()`/`wait_for()`/`wait_until()` 的三个原子部分的每一者（解锁+等待、唤醒和锁定）以能看做原子变量[修改顺序](https://zh.cppreference.com/w/cpp/atomic/memory_order#.E4.BF.AE.E6.94.B9.E9.A1.BA.E5.BA.8F)单独全序发生：顺序对此单独的 condition_variable 是特定的。譬如，这使得 `notify_one()` 不可能被延迟并解锁正好在进行 `notify_one()` 调用后开始等待的线程。
 
 # 参考
 
