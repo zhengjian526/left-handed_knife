@@ -234,7 +234,11 @@ dot -Tpng test_0524.0001.dot -o test_0524.0001.png
 
 ![perf_tools_0002](/images/posts/perf_tools/perf_tools_0002.png)
 
+#### 更多配置项
+
 更多环境变量设置和配置选项参考gperftools wiki :  https://gperftools.github.io/gperftools/heapprofile.html
+
+**wiki --> Documentation**有详细配置项的使用说明，例如在生成图时排除某些函数等。
 
 ![perf_tools_0003](/images/posts/perf_tools/perf_tools_0003.png)
 
@@ -280,7 +284,7 @@ Massif工具的官网介绍可以参考：http://valgrind.org/docs/manual/ms-man
 ## 数据采集
 
 ```shell
-algrind -v --tool=massif --time-unit=B --detailed-freq=1 --massif-out-file=./massif.out  ./test_corofile
+valgrind -v --tool=massif --time-unit=B --detailed-freq=1 --massif-out-file=./massif.out  ./test_corofile
 ```
 
 运行一段时间后 可以使用kill + pid的方式停止程序，不要使用 kill -9 + pid的方式，可能会导致采样失败。

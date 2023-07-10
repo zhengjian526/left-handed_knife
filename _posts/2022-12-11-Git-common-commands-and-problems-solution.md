@@ -33,7 +33,13 @@ $ git config --global user.name "John Doe"
 $ git config --global user.email johndoe@example.com
 ```
 
+- 生成ssh public-key
 
+```shell
+ssh-keygen -t rsa
+```
+
+然后连续三次回车即可在固定位置生成`id_rsa.pub`的文件。
 
 #### Tag相关
 
