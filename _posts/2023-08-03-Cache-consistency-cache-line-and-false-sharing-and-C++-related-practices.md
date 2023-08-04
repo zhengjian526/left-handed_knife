@@ -88,20 +88,205 @@ MESI 协议的四种状态之间的流转过程如下表，可以详细看到每
 
 高速缓存伪共享的解决办法就是让多线程操作的数据处在不同的高速缓存行，通常可以采用高速缓存行填充 （padding）技术或者高速缓存行对齐（align）技术，即让数据结构按照高速缓存行对齐，并且尽可能填充满 一个高速缓存行大小。
 
-
-
 # C++ 代码实例说明
 
-
+可以参考 [这篇文章](https://blog.51cto.com/u_6650004/5997218)，文中的实例我已经测试过了，跟着走一遍可以便于理解**内存对齐、cache line和伪共享**对C++程序性能的影响。
 
 
 
 # C++17中关于高速缓存伪共享的解决方法
 
+在C++17中引入了`std::hardware_destructive_interference_size`和`std::hardware_constructive_interference_size`两个变量解决伪共享问题。在头文件<new>中定义如下：
 
+| 在标头 `<new>` 定义                                          |      |            |
+| ------------------------------------------------------------ | ---- | ---------- |
+| inline constexpr [std::size_t](http://zh.cppreference.com/w/cpp/types/size_t)   hardware_destructive_interference_size = */\*implementation-defined\*/*; | (1)  | (C++17 起) |
+| inline constexpr [std::size_t](http://zh.cppreference.com/w/cpp/types/size_t)   hardware_constructive_interference_size = */\*implementation-defined\*/*; | (2)  | (C++17 起) |
+|                                                              |      |            |
 
+(1)两个对象间避免假数据共享的最小偏移。保证至少为 alignof([std::max_align_t](http://zh.cppreference.com/w/cpp/types/max_align_t))
 
+```c
+struct keep_apart {
+  alignas(std::hardware_destructive_interference_size) std::atomic<int> cat;
+  alignas(std::hardware_destructive_interference_size) std::atomic<int> dog;
+};
+```
 
+(2)促使真共享内存达成最大的连续内存大小。保证至少为 alignof([std::max_align_t](http://zh.cppreference.com/w/cpp/types/max_align_t))
+
+```c++
+struct together {
+  std::atomic<int> dog;
+  int puppy;
+};
+struct kennel {
+  // 其他数据成员……
+  alignas(sizeof(together)) together pack;
+  // 其他数据成员……
+};
+static_assert(sizeof(together) <= std::hardware_constructive_interference_size);
+```
+
+### 注解
+
+这些常量提供一种可移植的访问 L1 数据缓存线大小的方式。
+
+| [Feature-test](https://en.cppreference.com/w/cpp/utility/feature_test) macro |  Value  |   Std   |
+| :----------------------------------------------------------: | :-----: | :-----: |
+| [`__cpp_lib_hardware_interference_size`](https://en.cppreference.com/w/cpp/feature_test#Library_features) | 201703L | (C++17) |
+
+## 代码实例
+
+该程序使用两个线程(自动地)写入给定全局对象的数据成员。第一个对象放在一条缓存线上，这导致了“硬件干扰”。第二个对象将其数据成员保存在单独的缓存线上，因此避免了线程写入后可能的“缓存同步”。
+
+```c++
+#include <atomic>
+#include <chrono>
+#include <cstddef>
+#include <iomanip>
+#include <iostream>
+#include <mutex>
+#include <new>
+#include <thread>
+ 
+#ifdef __cpp_lib_hardware_interference_size
+    using std::hardware_constructive_interference_size;
+    using std::hardware_destructive_interference_size;
+#else
+    // 64 bytes on x86-64 │ L1_CACHE_BYTES │ L1_CACHE_SHIFT │ __cacheline_aligned │ ...
+    constexpr std::size_t hardware_constructive_interference_size = 64;
+    constexpr std::size_t hardware_destructive_interference_size = 64;
+#endif
+ 
+std::mutex cout_mutex;
+ 
+constexpr int max_write_iterations{10'000'000}; // the benchmark time tuning
+ 
+struct alignas(hardware_constructive_interference_size)
+OneCacheLiner { // occupies one cache line
+    std::atomic_uint64_t x{};
+    std::atomic_uint64_t y{};
+} oneCacheLiner;
+ 
+struct TwoCacheLiner { // occupies two cache lines
+    alignas(hardware_destructive_interference_size) std::atomic_uint64_t x{};
+    alignas(hardware_destructive_interference_size) std::atomic_uint64_t y{};
+} twoCacheLiner;
+ 
+inline auto now() noexcept { return std::chrono::high_resolution_clock::now(); }
+ 
+template<bool xy>
+void oneCacheLinerThread() {
+    const auto start { now() };
+ 
+    for (uint64_t count{}; count != max_write_iterations; ++count)
+        if constexpr (xy)
+             oneCacheLiner.x.fetch_add(1, std::memory_order_relaxed);
+        else oneCacheLiner.y.fetch_add(1, std::memory_order_relaxed);
+ 
+    const std::chrono::duration<double, std::milli> elapsed { now() - start };
+    std::lock_guard lk{cout_mutex};
+    std::cout << "oneCacheLinerThread() spent " << elapsed.count() << " ms\n";
+    if constexpr (xy)
+         oneCacheLiner.x = elapsed.count();
+    else oneCacheLiner.y = elapsed.count();
+}
+ 
+template<bool xy>
+void twoCacheLinerThread() {
+    const auto start { now() };
+ 
+    for (uint64_t count{}; count != max_write_iterations; ++count)
+        if constexpr (xy)
+             twoCacheLiner.x.fetch_add(1, std::memory_order_relaxed);
+        else twoCacheLiner.y.fetch_add(1, std::memory_order_relaxed);
+ 
+    const std::chrono::duration<double, std::milli> elapsed { now() - start };
+    std::lock_guard lk{cout_mutex};
+    std::cout << "twoCacheLinerThread() spent " << elapsed.count() << " ms\n";
+    if constexpr (xy)
+         twoCacheLiner.x = elapsed.count();
+    else twoCacheLiner.y = elapsed.count();
+}
+ 
+int main() {
+    std::cout << "__cpp_lib_hardware_interference_size "
+#   ifdef __cpp_lib_hardware_interference_size
+        " = " << __cpp_lib_hardware_interference_size << '\n';
+#   else
+        "is not defined, use " << hardware_destructive_interference_size << " as fallback\n";
+#   endif
+ 
+    std::cout
+        << "hardware_destructive_interference_size == "
+        << hardware_destructive_interference_size << '\n'
+        << "hardware_constructive_interference_size == "
+        << hardware_constructive_interference_size << "\n\n";
+ 
+    std::cout
+        << std::fixed << std::setprecision(2)
+        << "sizeof( OneCacheLiner ) == " << sizeof( OneCacheLiner ) << '\n'
+        << "sizeof( TwoCacheLiner ) == " << sizeof( TwoCacheLiner ) << "\n\n";
+ 
+    constexpr int max_runs{4};
+ 
+    int oneCacheLiner_average{0};
+    for (auto i{0}; i != max_runs; ++i) {
+        std::thread th1{oneCacheLinerThread<0>};
+        std::thread th2{oneCacheLinerThread<1>};
+        th1.join(); th2.join();
+        oneCacheLiner_average += oneCacheLiner.x + oneCacheLiner.y;
+    }
+    std::cout << "Average T1 time: " << (oneCacheLiner_average / max_runs / 2) << " ms\n\n";
+ 
+    int twoCacheLiner_average{0};
+    for (auto i{0}; i != max_runs; ++i) {
+        std::thread th1{twoCacheLinerThread<0>};
+        std::thread th2{twoCacheLinerThread<1>};
+        th1.join(); th2.join();
+        twoCacheLiner_average += twoCacheLiner.x + twoCacheLiner.y;
+    }
+    std::cout << "Average T2 time: " << (twoCacheLiner_average / max_runs / 2) << " ms\n\n";
+ 
+    std::cout << "Ratio T1/T2:~ " << 1.*oneCacheLiner_average/twoCacheLiner_average << '\n';
+}
+```
+
+C++17编译器下运行：
+
+```shell
+__cpp_lib_hardware_interference_size  = 201703
+hardware_destructive_interference_size == 64
+hardware_constructive_interference_size == 64
+
+sizeof( OneCacheLiner ) == 64
+sizeof( TwoCacheLiner ) == 128
+
+oneCacheLinerThread() spent 340.88 ms
+oneCacheLinerThread() spent 342.55 ms
+oneCacheLinerThread() spent 191.77 ms
+oneCacheLinerThread() spent 218.80 ms
+oneCacheLinerThread() spent 171.79 ms
+oneCacheLinerThread() spent 199.28 ms
+oneCacheLinerThread() spent 200.48 ms
+oneCacheLinerThread() spent 226.31 ms
+Average T1 time: 235 ms
+
+twoCacheLinerThread() spent 52.40 ms
+twoCacheLinerThread() spent 52.41 ms
+twoCacheLinerThread() spent 53.90 ms
+twoCacheLinerThread() spent 53.91 ms
+twoCacheLinerThread() spent 52.36 ms
+twoCacheLinerThread() spent 52.35 ms
+twoCacheLinerThread() spent 52.46 ms
+twoCacheLinerThread() spent 52.47 ms
+Average T2 time: 52 ms
+
+Ratio T1/T2:~ 4.51
+```
+
+代码示例中T1时间为结构体oneCacheLiner在两个线程中分别修改和访问原子变量x 和 y的平均时间，该结构体中x和y 位于同一个cache line中，发生了伪共享现象； 在twoCacheLiner中则是解决了伪共享。通过最后的`Ratio T1/T2:~ 4.51`可以得知, oneCacheLiner所用的时间是 twoCacheLiner的4.51倍，可见高速缓存伪共享会极大程度上减低程序执行效率。
 
 # 参考
 
