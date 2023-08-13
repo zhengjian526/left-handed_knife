@@ -3,8 +3,12 @@ layout: post
 title: C++内存顺序和无锁编程
 categories: C++
 description: C++内存顺序和无锁编程
-keywords: C++, atomic, memory order, lock-free
+keywords: C++, atomic, memory order, lock-free 
 ---
+
+# 前言
+
+探究内存一致性的底层原理最好从研究CPU体系结构中内存一致性模型等角度去学习研究，理解内存屏障，笔者在写此篇文章之前先学习了RISC-V的内存屏障相关知识，再来学习C++中的相关处理，虽然笔者对此研究颇浅，也仍有迷惑，但从体系结构的角度去看待问题可能会更有助于理解。
 
 # C++ 并发的内存顺序
 
@@ -232,15 +236,105 @@ int main()
 
 ## 4.memory_order_seq_cst
 
-顺序一致性选项。带标签 memory_order_seq_cst 的原子操作不仅以与释放/获得顺序相同的方式排序内存（在一个线程中*先发生于*存储的任何结果都变成进行加载的线程中的*可见副效应*），还对所有带此标签的内存操作建立*单独全序*。
+顺序一致性模型，根据不同的CPU架构可能有不同的处理，可以参考《RISC-V体系结构编程与实践》第15章 第1小节，内存一致性模型中的顺序一致性模型。顺序一致性是所有内存序中性能最差的，对其进行推理和分析要比其他内存次序模型容易的多，因为它会令全部操作形成一个确定的总序列。一般而言，原型设计中的初始化版本都采用memory_order_seq_cst内存次序，当基本操作功能正常后，再逐步放宽其他内存次序，所以从某种意义上讲，采用其他内存次序其实是一项优化。
 
----------
+Sequential consistency模型又称为顺序一致性模型，是控制粒度最严格的内存模型。最早追溯到Leslie Lamport在**「1979」**年**「9」**月发表的论文《**「How to Make a Multiprocessor Computer That Correctly Executes Multiprocess Programs」**》，在该文里面首次提出了里提出了Sequential consistency定义：
 
-**这个较复杂 分析后补充**
+> ❝ the result of any execution is the same as if the operations of all the processors were executed in some sequential order, and the operations of each individual processor appear in this sequence in the order specified by its program  ❞
 
---------------
+根据这个定义，在顺序一致性模型下，程序的执行顺序与代码顺序严格一致，也就是说，在顺序一致性模型中，不存在指令乱序。
 
+顺序一致性模型对应的约束符号是memory_order_seq_cst，这个模型对于内存访问顺序的一致性控制是最强的，类似于很容易理解的[互斥锁](https://www.zhihu.com/search?q=互斥锁&search_source=Entity&hybrid_search_source=Entity&hybrid_search_extra={"sourceType"%3A"answer"%2C"sourceId"%3A2532408164})模式，先得到锁的先访问。
 
+假设有两个线程，分别是线程A和线程B，那么这两个线程的执行情况有三种：第一种是线程A先执行，然后再执行线程B；第二种情况是线程 B 先执行，然后再执行线程A；第三种情况是线程A和线程B同时并发执行，即线程A的代码序列和线程B的代码序列交替执行。尽管可能存在第三种代码交替执行的情况，但是单纯从线程A或线程B的角度来看，每个线程的代码执行应该是按照代码顺序执行的，这就顺序一致性模型。总结起来就是：
+
+- 每个线程的执行顺序与代码顺序严格一致
+- 线程的执行顺序可能会交替进行，但是从单个线程的角度来看，仍然是顺序执行
+
+为了便于理解上述内容，举例如下：
+
+```c
+x = y = 0;
+
+thread1:
+x = 1;
+r1 = y;
+
+thread2:
+y = 1;
+r2 = x;
+```
+
+因为多线程执行顺序有可能是交错执行的，所以上述示例执行顺序有可能是:
+
+- x = 1; r1 = y; y = 1; r2 = x
+- y = 1; r2 = x; x = 1; r1 = y
+- x = 1; y = 1; r1 = y; r2 = x
+- x = 1; y = 1;r2 = x;  r1 = y
+- y = 1; x = 1; r1 = y; r2 = x
+- y = 1; x = 1; r2 = x; r1 = y
+
+虽然多线程环境下，线程执行顺序是乱的，但是单纯从线程1的角度来看，执行顺序是x = 1; r1 = y；从线程2角度来看，执行顺序是y = 1; r2 = x。
+
+> std::atomic的操作都使用memory_order_seq_cst 作为默认值。如果不确定使用何种内存访问模型，用 memory_order_seq_cst能确保不出错。
+
+顺序一致性的所有操作都按照代码指定的顺序进行，符合开发人员的思维逻辑，但这种严格的排序也限制了现代CPU利用硬件进行并行处理的能力，会严重拖累系统的性能。
+
+---------------
+
+在[cppreference链接](https://zh.cppreference.com/w/cpp/atomic/memory_order)的`序列一致顺序`小节也有更细致的描述，但其中的描述比较晦涩，代码示例贴出来，再结合上述描述进行理解，相信很快可以看懂下面的例子。代码示例：
+
+```c++
+#include <thread>
+#include <atomic>
+#include <cassert>
+#include <iostream>
+ 
+std::atomic<bool> x = {false};
+std::atomic<bool> y = {false};
+std::atomic<int> z = {0};
+ 
+void write_x()
+{
+    x.store(true, std::memory_order_seq_cst);
+}
+ 
+void write_y()
+{
+    y.store(true, std::memory_order_seq_cst);
+}
+ 
+void read_x_then_y()
+{
+    while (!x.load(std::memory_order_seq_cst))
+        ;
+    if (y.load(std::memory_order_seq_cst)) {
+        ++z;
+    }
+}
+ 
+void read_y_then_x()
+{
+    while (!y.load(std::memory_order_seq_cst))
+        ;
+    if (x.load(std::memory_order_seq_cst)) {
+        ++z;
+    }
+}
+ 
+int main()
+{
+    std::thread a(write_x);
+    std::thread b(write_y);
+    std::thread c(read_x_then_y);
+    std::thread d(read_y_then_x);
+    a.join(); b.join(); c.join(); d.join();
+    std::cout << z << std::endl;
+    assert(z.load() != 0);  // 决不发生
+}
+```
+
+测试发现assert 永远为真。
 
 ## 5.与 volatile 的关系
 
@@ -581,13 +675,9 @@ free lock stack costs micro:92738.2
 
 
 
-## 无锁队列实现
+## 无锁队列
 
-
-
-
-
-### 无锁队列和有锁队列的性能对比
+无锁队列的实现和性能对比涉及到的细节和数据结构比较多，需要单独开一篇文章细说。
 
 
 
@@ -596,4 +686,6 @@ free lock stack costs micro:92738.2
 - https://zh.cppreference.com/w/cpp/atomic/memory_order
 - https://mp.weixin.qq.com/s/HdP5NcQIdzfznGwcHLTvMw
 - https://zhuanlan.zhihu.com/p/649203972
+- https://zhuanlan.zhihu.com/p/454915077
+- https://www.zhihu.com/question/536176990
 - https://www.zhihu.com/question/53303879/answer/134936389
