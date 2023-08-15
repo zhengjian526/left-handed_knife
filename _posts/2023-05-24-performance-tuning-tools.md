@@ -669,7 +669,8 @@ $ cat /proc/sys/vm/swappiness
 # 网络性能分析
 
 
-
+# 常用分析工具和定位技巧
+参考[链接](https://mp.weixin.qq.com/s/bWo7a5dYyEpYhGYXLSt7sw):Linux 问题故障定位的技巧大全
 
 
 # 参考
