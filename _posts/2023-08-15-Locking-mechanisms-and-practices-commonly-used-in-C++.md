@@ -269,6 +269,163 @@ Back in main(), data = Example data after processing
 
 # 读写锁
 
+相比[互斥锁](https://so.csdn.net/so/search?q=互斥锁&spm=1001.2101.3001.7020)，读写锁允许更高的并行性，互斥量要么锁住状态要么不加锁，而且一次只有一个线程可以加锁。
+读写锁可以有三种状态：
+
+- 读模式加锁状态；
+- 写模式加锁状态；
+- 不加锁状态；
+
+读写锁也叫“共享-独占锁”，C++中使用`std::shared_mutex`实现，C++17起。
+
+## std::shared_mutex
+
+| 在标头 `<shared_mutex>` 定义 |      |            |
+| ---------------------------- | ---- | ---------- |
+| class shared_mutex;          |      | (C++17 起) |
+
+`shared_mutex` 类是一个同步原语，可用于保护共享数据不被多个线程同时访问。与便于独占访问的其他互斥类型不同，shared_mutex 拥有二个访问级别：
+
+- *共享* - 多个线程能共享同一互斥的所有权。
+
+- *独占性* - 仅一个线程能占有互斥。
+
+若一个线程已获取*独占性*锁（通过 [lock](https://zh.cppreference.com/w/cpp/thread/shared_mutex/lock) 、 [try_lock](https://zh.cppreference.com/w/cpp/thread/shared_mutex/try_lock) ），则无其他线程能获取该锁（包括*共享*的）。
+
+仅当任何线程均未获取*独占性*锁时，*共享*锁能被多个线程获取（通过 [lock_shared](https://zh.cppreference.com/w/cpp/thread/shared_mutex/lock_shared) 、 [try_lock_shared](https://zh.cppreference.com/w/cpp/thread/shared_mutex/try_lock_shared) ）。
+
+在一个线程内，同一时刻只能获取一个锁（*共享*或*独占性*）。
+
+共享互斥体在能由任何数量的线程同时读共享数据，但一个线程只能在无其他线程同时读写时写同一数据时特别有用。
+
+`shared_mutex` 类满足[*共享互斥体* *(SharedMutex)* ](https://zh.cppreference.com/w/cpp/named_req/SharedMutex)和[*标准布局类型* *(StandardLayoutType)* ](https://zh.cppreference.com/w/cpp/named_req/StandardLayoutType)的所有要求。
+
+|                          排他性锁定                          |                                                             |
+| :----------------------------------------------------------: | ----------------------------------------------------------- |
+| [lock](https://zh.cppreference.com/w/cpp/thread/shared_mutex/lock) | 锁定互斥，若互斥不可用则阻塞 (公开成员函数)                 |
+| [try_lock](https://zh.cppreference.com/w/cpp/thread/shared_mutex/try_lock) | 尝试锁定互斥，若互斥不可用则返回 (公开成员函数)             |
+| [unlock](https://zh.cppreference.com/w/cpp/thread/shared_mutex/unlock) | 解锁互斥 (公开成员函数)                                     |
+|                         **共享锁定**                         |                                                             |
+| [lock_shared](https://zh.cppreference.com/w/cpp/thread/shared_mutex/lock_shared) | 为共享所有权锁定互斥，若互斥不可用则阻塞 (公开成员函数)     |
+| [try_lock_shared](https://zh.cppreference.com/w/cpp/thread/shared_mutex/try_lock_shared) | 尝试为共享所有权锁定互斥，若互斥不可用则返回 (公开成员函数) |
+| [unlock_shared](https://zh.cppreference.com/w/cpp/thread/shared_mutex/unlock_shared) | 解锁互斥（共享所有权） (公开成员函数)                       |
+
+###  排他性锁定
+
+- **lock**
+
+锁定互斥。若另一线程已锁定互斥，则lock的调用线程将阻塞执行，直至获得锁。
+若已以任何模式（共享或排他性）占有 mutex 的线程调用 lock ，则行为未定义。也就是说，**已经获得读模式锁或者写模式锁的线程再次调用lock的话，行为是未定义的。**
+注意：通常不直接使用std::shared_mutex::lock()，而是通过unique_lock或者lock_guard进行管理。
+
+- **unlock**
+
+解锁互斥。
+互斥必须为当前执行线程所锁定，否则行为未定义。如果当前线程不拥有该互斥还去调用unlock，那么就不知道去unlock谁，行为是未定义的。
+注意：通常不直接调用 unlock() 而是用 std::unique_lock 与 std::lock_guard 管理排他性锁定。
+
+### 共享锁定
+
+- **std::shared_mutex::lock_shared**
+
+相比mutex，shared_mutex还拥有lock_shared函数。
+该函数获得互斥的共享所有权。若另一线程以排他性所有权保有互斥，则lock_shared的调用者将阻塞执行，直到能取得共享所有权。
+若已以任何模式（排他性或共享）占有 mutex 的线程调用 lock_shared ，则行为未定义。**即：当以读模式或者写模式拥有锁的线程再次调用lock_shared时，行为是未定义的，可能产生死锁。**
+若多于实现定义最大数量的共享所有者已以共享模式锁定互斥，则 lock_shared 阻塞执行，直至共享所有者的数量减少。所有者的最大数量保证至少为 10000。
+**注意：通常不直接调用 lock_shared() 而是用 std::shared_lock 管理共享锁定**。shared_lock与unique_lock的使用方法类似。
+
+## std::shared_lock
+
+| 在标头 `<shared_mutex>` 定义               |      |            |
+| ------------------------------------------ | ---- | ---------- |
+| template< class Mutex > class shared_lock; |      | (C++14 起) |
+
+类 `shared_lock` 是通用共享互斥所有权包装器，允许延迟锁定、定时锁定和锁所有权的转移。锁定 `shared_lock` ，会以共享模式锁定关联的共享互斥（ [std::unique_lock](https://zh.cppreference.com/w/cpp/thread/unique_lock) 可用于以排他性模式锁定）。
+
+`shared_lock` 类可移动，但不可复制——它满足[*可移动构造* *(MoveConstructible)* ](https://zh.cppreference.com/w/cpp/named_req/MoveConstructible)与[*可移动赋值* *(MoveAssignable)* ](https://zh.cppreference.com/w/cpp/named_req/MoveAssignable)的要求，但不满足[*可复制构造* *(CopyConstructible)* ](https://zh.cppreference.com/w/cpp/named_req/CopyConstructible)或[*可复制赋值* *(CopyAssignable)* ](https://zh.cppreference.com/w/cpp/named_req/CopyAssignable)。
+
+`shared_lock` 符合[*可锁定* *(Lockable)* ](https://zh.cppreference.com/w/cpp/named_req/Lockable)要求。若 `Mutex` 符合[*可共享定时锁定* *(SharedTimedLockable)* ](https://zh.cppreference.com/w/cpp/named_req/SharedTimedLockable)要求，则 `shared_lock` 亦符合 [*可定时锁定* *(TimedLockable)* ](https://zh.cppreference.com/w/cpp/named_req/TimedLockable)要求。
+
+为以共享所有权模式等待于共享互斥，可使用 [std::condition_variable_any](https://zh.cppreference.com/w/cpp/thread/condition_variable_any) （ [std::condition_variable](https://zh.cppreference.com/w/cpp/thread/condition_variable) 要求 [std::unique_lock](https://zh.cppreference.com/w/cpp/thread/unique_lock) 故而只能以唯一所有权模式等待）。
+
+代码示例：
+
+```c++
+#include <iostream>
+#include <mutex>  // 对于 std::unique_lock
+#include <shared_mutex>
+#include <thread>
+ 
+class ThreadSafeCounter {
+ public:
+  ThreadSafeCounter() = default;
+ 
+  // 多个线程/读者能同时读计数器的值。
+  unsigned int get() const {
+    std::shared_lock<std::shared_mutex> lock(mutex_);
+    return value_;
+  }
+ 
+  // 只有一个线程/写者能增加/写线程的值。
+  void increment() {
+    std::unique_lock<std::shared_mutex> lock(mutex_);
+    value_++;
+  }
+ 
+  // 只有一个线程/写者能重置/写线程的值。
+  void reset() {
+    std::unique_lock<std::shared_mutex> lock(mutex_);
+    value_ = 0;
+  }
+ 
+ private:
+  mutable std::shared_mutex mutex_;
+  unsigned int value_ = 0;
+};
+ 
+int main() {
+  ThreadSafeCounter counter;
+ 
+  auto increment_and_print = [&counter]() {
+    for (int i = 0; i < 3; i++) {
+      counter.increment();
+      std::cout << std::this_thread::get_id() << ' ' << counter.get() << '\n';
+ 
+      // 注意：写入 std::cout 实际上也要由另一互斥同步。省略它以保持示例简洁。
+    }
+  };
+ 
+  std::thread thread1(increment_and_print);
+  std::thread thread2(increment_and_print);
+ 
+  thread1.join();
+  thread2.join();
+}
+ 
+// 解释：下列输出在单核机器上生成。 thread1 开始时，它首次进入循环并调用 increment() ，
+// 随后调用 get() 。然而，在它能打印返回值到 std::cout 前，调度器将 thread1 置于休眠
+// 并唤醒 thread2 ，它显然有足够时间一次运行全部三个循环迭代。再回到 thread1 ，它仍在首个
+// 循环迭代中，它最终打印其局部的计数器副本的值，即 1 到 std::cout ，再运行剩下二个循环。
+// 多核机器上，没有线程被置于休眠，且输出更可能为递增顺序。
+```
+
+可能得输出:
+
+```shell
+123084176803584 2
+123084176803584 3
+123084176803584 4
+123084185655040 1
+123084185655040 5
+123084185655040 6
+```
+
+## 读写锁一定比互斥锁效率更高吗？
+
+首先，一个常见的误区是，认为在读多写少的情况下，读写锁的性能一定要比mutex高。实际上，读写锁由于区分读锁和写锁，每次加锁时都要做额外的逻辑处理（如区分读锁和写锁、避免写锁“饥饿”等等），单纯从性能上来讲是要低于更为简单的mutex的；但是，rwlock由于读锁可重入，所以**实际上是提升了并行性**，在读多写少的情况下可以降低时延。
+
+读写锁可能仅对某些特定场景下，效率会更高。因此大多数情况下使用互斥锁就能够满足需求。如果确实需要使用读写锁的话还是在实际业务场景中进行测试后再替换。
+
 
 
 # 信号量
@@ -281,4 +438,4 @@ Back in main(), data = Example data after processing
 
 - https://developer.aliyun.com/article/1260145?spm=a2c6h.14164896.0.0.22711c757xudDu
 - https://developer.aliyun.com/article/1260146?spm=a2c6h.14164896.0.0.22711c757xudDu
-- 
+- https://blog.csdn.net/princeteng/article/details/103952888

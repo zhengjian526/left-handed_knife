@@ -189,13 +189,13 @@ git remote set-url origin [仓库ssh或者http地址]
 
 
 ## 常见问题解决
-### 开发分支合并到主分支的commit记录压缩成一条
+### 1.开发分支合并到主分支的commit记录压缩成一条
 
 ```bash
 git merge --squash featureA
 ```
 
-### 当使用Git进行代码push提交时，出现报错信息“fatal: 'origin' does not appear to be a git repository...”
+### 2.当使用Git进行代码push提交时，出现报错信息“fatal: 'origin' does not appear to be a git repository...”
 
 报错：
 
@@ -218,7 +218,7 @@ git remote add origin 仓库地址
 gti push -u origin master
 ```
 
-### 缓存账号密码
+### 3.缓存账号密码
 
 - 永久保存
 
@@ -232,7 +232,7 @@ git config --global credential.helper store
 git config --global credential.helper 'cache --timeout=600'
 ```
 
-### 报错：git pull时报错ssh_exchange_identification: Connection closed by remote host
+### 4.报错：git pull时报错ssh_exchange_identification: Connection closed by remote host
 
 排查思路: 首先确定是ssh的问题，使用ssh -v github.com进行debug，打印信息为：
 
@@ -262,6 +262,12 @@ ssh_exchange_identification: Connection closed by remote host
 ```
 
 可以参考这篇文章解决：https://blog.csdn.net/seymourde/article/details/108449673
+
+### 5.强制远端数据覆盖本地记录
+
+```shell
+git fetch --all && git reset --hard origin/master && git pull
+```
 
 
 
