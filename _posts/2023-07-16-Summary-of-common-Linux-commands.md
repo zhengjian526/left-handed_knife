@@ -8,6 +8,57 @@ keywords: Linux, command
 
 #  Linux 常用命令总结
 
+## 0.常见问题解决
+
+### linux查看动态库/程序依赖的库
+
+**注：交叉编译环境下对应换成交叉编译的命令行**
+
+#### objdump命令
+
+```shell
+# 查看依赖的库
+objdump -x xxx.so | grep NEEDED
+
+# 查看可执行程序依赖的库
+objdump -x ./testTime | grep NEEDED
+```
+
+#### readelf命令
+
+```shell
+# 查看依赖的库
+readelf -a xxx.so | grep "Shared"
+
+# 查看可执行程序依赖的库
+readelf -a ./testTime | grep "Shared"
+
+# 查看依赖的库
+readelf -d xxx.so
+readelf -d ./testTime
+
+# 查看静态库有哪些.o文件
+readelf -d xxx.a
+```
+
+#### ldd命令
+
+```shell
+# 查看依赖的库
+ldd xxx.so
+
+# 查看可执行程序依赖的库
+ldd ./testTime
+```
+
+#### 在服务端查看使用*.so的进程
+
+```
+lsof  *.so
+```
+
+
+
 ## 1. 基本命令
 
 ```shell

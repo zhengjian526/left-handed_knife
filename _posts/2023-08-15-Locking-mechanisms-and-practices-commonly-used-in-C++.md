@@ -265,6 +265,53 @@ Back in main(), data = Example data after processing
 
 # 自旋锁
 
+**自旋锁（spin lock）是一种多线程同步机制，它是在等待锁的过程中不断地循环检查锁是否可用，而不是放弃CPU，从而避免了线程上下文切换带来的开销。自旋锁适用于锁被占用的时间很短的场景，因为自旋锁在等待锁的过程中会一直占用CPU，当锁被占用的时间较长时，这种方式会浪费大量的CPU资源。在锁的持有时间较短的情况下，自旋锁可以在等待锁的过程中避免线程上下文切换的开销，从而提高性能。**
+
+在C++11中，可以使用std::atomic_flag来实现自旋锁，它是一个布尔类型的原子变量，但是在使用时需要注意以下几点：
+
+- 必须用 ATOMIC_FLAG_INIT 初始化 std::atomic_flag。
+- 由于 std::atomic_flag 只有两种状态（被设置或未被设置），所以我们可以使用 test_and_set 成员函数来实现自旋锁的加锁和解锁操作。
+- 由于自旋锁是一种忙等的锁，所以在使用 std::atomic_flag 实现自旋锁时需要避免死锁。
+
+代码示例：
+
+```c++
+#include <thread>
+#include <vector>
+#include <iostream>
+#include <atomic>
+class SpinLock {
+ public:
+  SpinLock() : flag_(ATOMIC_FLAG_INIT) {}
+  void lock() {
+    while (flag_.test_and_set(std::memory_order_acquire)) {
+      // 自旋等待
+    }
+  }
+  void unlock() { flag_.clear(std::memory_order_release); }
+ private:
+  std::atomic_flag flag_;
+};
+SpinLock spin_lock;
+void f(int n) {
+    for (int cnt = 0; cnt < 100; ++cnt) {
+        spin_lock.lock();
+    	std::cout << "Output from thread " << n << '\n';
+        spin_lock.unlock();
+    }
+}
+int main()
+{
+    std::vector<std::thread> v;
+    for (int n = 0; n < 10; ++n) {
+        v.emplace_back(f, n);
+    }
+    for (auto& t : v) {
+        t.join();
+    }
+}
+```
+
 
 
 # 读写锁
