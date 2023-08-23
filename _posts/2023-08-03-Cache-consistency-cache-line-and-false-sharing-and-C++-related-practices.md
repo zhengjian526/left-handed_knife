@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Cache缓存一致性, cache line和高速缓存伪共享及其C++相关实践
-categories: 计算机组成原理, C++
+categories: 计算机组成原理 C++
 description: Cache缓存一致性, cache line和高速缓存伪共享及其C++相关实践
 keywords: 计算机组成原理, 高速缓存, C++
 ---
