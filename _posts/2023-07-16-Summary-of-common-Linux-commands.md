@@ -878,7 +878,128 @@ rpm –q wu-ftpd
 
 rpm –ql xv (l 参数：显示文件列表)
 
+## 29. grep高频使用命令
+
+1. 在文件中查找特定单词：
+
+```shell
+grep "pattern" file.txt
+```
+
+2. 忽略大小写查找
+
+```shell
+grep -i "pattern" file.txt
+```
+
+3. 显示匹配行的行号：
+
+```shell
+grep -n "pattern" file.txt
+```
+
+4. 递归搜索目录中的所有文件：
+
+```shell
+grep -r "pattern" /path/to/directory
+```
+
+5. 反向搜索，显示不包含模式的行：
+
+```shell
+grep -v "pattern" file.txt
+```
+
+6. 使用正则表达式搜索：
+
+```shell
+grep -E "regex_pattern" file.txt
+```
+
+7. 查找多个模式之一：
+
+```shell
+grep "pattern1\|pattern2" file.txt
+```
+
+8. 统计匹配次数：
+
+```shell
+grep -c "pattern" file.txt
+```
+
+9. 查找时匹配整个单词而不是部分单词：
+
+```shell
+grep -w "pattern" file.txt
+```
+
+10. 查找同时包含两个模式的行：
+
+```shell
+grep "pattern1.*pattern2" file.txt
+```
+
+### grep命令与其他命令组合
+
+1. `grep` 结合 `ls`：查找目录中包含特定关键词的文件 :
+
+```shell
+ls | grep "pattern"
+```
+
+2. `grep` 结合 `find`：在目录及其子目录中查找包含特定关键词的文件 :
+
+```shell
+find /path/to/search -type f -exec grep -l "pattern" {} \;
+```
+
+3. `grep` 结合 `cat`：查看包含特定关键词的文件内容：
+
+```shell
+cat file.txt | grep "pattern"
+```
+
+4. `grep` 结合 `sed`：使用正则表达式替换匹配的内容：
+
+```shell
+sed -i 's/pattern/replacement/g' file.txt
+```
+
+5. `grep` 结合 `awk`：根据特定字段进行过滤或操作：
+
+```shell
+awk '/pattern/{print $2}' file.txt
+```
+
+6. `grep` 结合 `cut`：通过定界符截取特定字符：
+
+```shell
+cut -d',' -f2 file.csv | grep "pattern"
+```
+
+7. `grep` 结合 `sort`：查找匹配并排序结果：
+
+```shell
+grep "pattern" file.txt | sort
+```
+
+8. `grep` 结合管道：将多个 `grep` 命令串联起来以进行更复杂的过滤：
+
+```shell
+grep "pattern1" file.txt | grep "pattern2"
+```
+
+9. `grep` 结合 `xargs`：将 `grep` 结果作为参数传递给另一个命令：
+
+```shell
+grep "pattern" file.txt | xargs command
+```
+
+
+
 ## 参考
 
 - https://blog.csdn.net/l1028386804/article/details/117917710
 - https://mp.weixin.qq.com/s/X0F50-NNVZFVUmIMGqM0_A
+- https://mp.weixin.qq.com/s/4m2AgJK2fhyHZTt8F-9A7A
