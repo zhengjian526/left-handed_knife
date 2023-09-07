@@ -86,6 +86,62 @@ Switched to a new branch 'sf'
  Branch serverfix set up to track remote branch serverfix from origin.
 ```
 
+#### 删除远程分支
+
+```shell
+git push origin --delete branch_xxx
+```
+
+#### 同步远程已删除的分支
+
+使用以下命令查看远程分支状态：
+
+```shell
+git remote show origin
+```
+
+输出：
+
+```shell
+ remote origin
+  Fetch URL: git@github.com:dta0502/Data-Analysis-In-Action.git
+  Push  URL: git@github.com:dta0502/Data-Analysis-In-Action.git
+  HEAD branch: master
+  Remote branches:
+    add-license-1              tracked
+    dev                        tracked
+    master                     tracked
+    refs/remotes/origin/readme stale (use 'git remote prune' to remove)
+  Local branches configured for 'git pull':
+    dev    merges with remote dev
+    master merges with remote master
+    readme merges with remote readme
+  Local refs configured for 'git push':
+    dev    pushes to dev    (up to date)
+    master pushes to master (up to date)
+```
+
+发现`refs/remotes/origin/readme`状态是stale(陈旧的)，并且后面有命令提示。
+
+可以执行以下命令同步删除已经不存在的远程跟踪分支：
+
+```shell
+git remote prune origin
+```
+
+或者
+
+```shell
+git fetch -p
+```
+
+然后再对应删除本地多余的分支：
+
+```shell
+git checkout master
+git branch -d branch_xxx
+```
+
 
 
 -----
