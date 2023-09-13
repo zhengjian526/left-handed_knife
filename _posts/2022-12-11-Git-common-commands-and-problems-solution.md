@@ -325,6 +325,18 @@ ssh_exchange_identification: Connection closed by remote host
 git fetch --all && git reset --hard origin/master && git pull
 ```
 
+### 6. git命令忽略文件权限修改的命令
+
+```shell
+git config core.fileMode false
+```
+
+如果需要修改回来，执行：
+
+```shell
+git config core.fileMode true
+```
+
 
 
 ## 参考
