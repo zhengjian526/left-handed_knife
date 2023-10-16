@@ -1883,6 +1883,10 @@ Context: Sorting data using the strategy (not sure how it'll do it)
 edcba
 ```
 
+## 设计模式最佳实践学习
+
+[跟着 iLogtail 学习设计模式](https://mp.weixin.qq.com/s/j7W8NH9mS8-xtLS_O2PjJA)
+
 
 
 
@@ -1891,3 +1895,4 @@ edcba
 - https://refactoringguru.cn/design-patterns
 - 祁宇 <<深入应用C++11：代码优化与工程级应用>>
 - https://www.cnblogs.com/xiaolincoding/p/11437231.html
+- https://mp.weixin.qq.com/s/j7W8NH9mS8-xtLS_O2PjJA
