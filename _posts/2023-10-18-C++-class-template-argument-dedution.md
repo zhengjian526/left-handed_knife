@@ -61,6 +61,70 @@ auto v1 = new std::vector{1, 3, 5};
 
 
 
+
+
+虽然CTAD用起来很方便，但是相对于不使用CTAD特性，有时候CTAD会存在一些问题，即编译器推导的类型并不是我们所预期的，仍然使用最开始的例子：
+
+```c++
+int main() {
+  Add ts("hello, ", "world!\n");
+  auto ret = ts.result();
+  
+  return 0;
+}
+```
+
+编译会报错，
+
+```shell
+error: invalid operands of types 'const char* const' and 'const char* const' to binary 'operator+'
+T result()const{return first_ + second_;}
+```
+
+即编译器会将"hello "和"world!\n"推导成为*const char const**，而c++的char*是不支持operator+操作的，这就导致了上面的编译错误。
+
+此时，我们可以使用C++17之前的实例方法即显示指明类型，如下：
+
+```c++
+int main() {
+  Add<std::string> ts("hello, ", "world!\n");
+  auto ret = ts.result();
+  
+  return 0;
+}
+```
+
+如果这样做的话，多少有点失去了CTAD的好处，为了解决这种类似的问题，C++17支持**显示类型推导，**即添加代码：
+
+```c++
+Add(const char*, const char*) -> Add<std::string>;
+```
+
+需要注意的是，这一行类型推导需要加在类声明之后，这样编译器在遇到参数为const cha*的时候，会自动将其推导为std::string。
+
+这样我们的测试用例就可以通过了：
+
+```c++
+template <typename T>
+class Add{
+ public:
+  Add(T first, T second): first_{first}, second_{second} {}
+  T result()const{return first_ + second_;}
+ private:
+  T first_;
+  T second_;
+};
+
+Add(const char*, const char*) -> Add<std::string>;
+
+int main() {
+  Add ts("hello ", " world!\n");
+  ts.result();
+}
+```
+
+
+
 # 参考
 
 - https://mp.weixin.qq.com/s/i2ctFdeN1uNM9QD9NfRvJQ
