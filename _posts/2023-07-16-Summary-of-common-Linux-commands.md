@@ -123,6 +123,15 @@ ls | grep -v keep | xargs rm
 ls | grep -v keep | xargs rm -rf 
 ```
 
+### (4) Linux终端下快速删除单词
+
+```shell
+ctrl + w    // 快速删除光标前的一个单词
+ctrl + del  // 快速删除光标后的一个单词
+ctrl + u    // 删除光标前的整行文本
+ctrl + k    // 删除光标后的所有文本
+```
+
 
 
 -------
