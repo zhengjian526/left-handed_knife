@@ -1,7 +1,7 @@
 ---
 layout: post
 title: CPU体系结构之内存屏障(Memory Barrier)
-categories: 计算机组成原理, CPU体系结构, 内存屏障
+categories: 计算机组成原理
 description: CPU体系结构之内存屏障(Memory Barrier)
 keywords: 计算机组成原理, CPU体系结构, 内存屏障
 ---

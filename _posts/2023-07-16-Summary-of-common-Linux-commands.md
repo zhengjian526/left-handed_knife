@@ -132,6 +132,12 @@ ctrl + u    // 删除光标前的整行文本
 ctrl + k    // 删除光标后的所有文本
 ```
 
+### (5) kill掉包含某些关键字的进程
+
+```shell
+ps aux | grep chip | grep -v grep  | awk '{print $1}' | xargs kill
+```
+
 
 
 -------
