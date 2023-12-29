@@ -1,7 +1,7 @@
 ---
 layout: post
 title: 【转载】如何写一篇高质量的技术文章
-categories: Soft Skills
+categories: 软技能
 description: C++可调用类型
 keywords: 软技能
 ---
