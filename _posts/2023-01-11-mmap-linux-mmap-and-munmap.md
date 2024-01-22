@@ -1,7 +1,7 @@
 ---
 layout: post
 title: 记录Linux下mmap和munmap调用次数不匹配导致的问题解决
-categories: Linux系统编程
+categories: Linux内核架构与系统编程
 description: 记录Linux下mmap和munmap调用次数不匹配导致的问题解决
 keywords: Linux, mmap, munmap, vm.max_map_count
 ---

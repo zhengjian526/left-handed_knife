@@ -1,7 +1,7 @@
 ---
 layout: post
 title: 【转载】高性能低延时系统设计
-categories: Linux系统编程
+categories: Linux内核架构与系统编程
 description: 高性能低延时系统设计
 keywords: Linux, system-design
 ---

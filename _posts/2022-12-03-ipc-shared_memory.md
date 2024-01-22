@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Linux进程间通信--共享内存
-categories: Linux系统编程
+categories: Linux内核架构与系统编程
 description: Linux进程间通信--共享内存
 keywords: Linux, IPC, 共享内存
 ---

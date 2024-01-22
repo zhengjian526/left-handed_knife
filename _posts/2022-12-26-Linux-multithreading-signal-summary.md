@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Linux多线程信号总结
-categories: Linux系统编程
+categories: Linux内核架构与系统编程
 description: Linux多线程信号总结
 keywords: Linux, signals, multithreading
 ---

@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Linux等待信号--sigsuspend
-categories: Linux系统编程
+categories: Linux内核架构与系统编程
 description: Linux等待信号--sigsuspend
 keywords: Linux, signals, sigsuspend
 ---

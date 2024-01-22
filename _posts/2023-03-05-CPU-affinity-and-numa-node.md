@@ -1,7 +1,7 @@
 ---
 layout: post
 title: CPU亲和性(绑核)和numa节点配置
-categories: Linux系统编程
+categories: Linux内核架构与系统编程
 description: CPU亲和性(绑核)和numa节点配置
 keywords: Linux, CPU affinity, numa node
 ---

@@ -1,7 +1,7 @@
 ---
 layout: post
 title: STL和glibc导致的"内存泄漏"分析
-categories: Linux系统编程
+categories: Linux内核架构与系统编程
 description: STL和glibc导致的"内存泄漏"分析
 keywords: Linux, STL, glibc, malloc_trim
 ---

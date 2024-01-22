@@ -1,7 +1,7 @@
 ---
 layout: post
 title: 【转载】Linux常用命令总结
-categories: Linux系统编程
+categories: Linux内核架构与系统编程
 description: Linux常用命令总结
 keywords: Linux, command
 ---

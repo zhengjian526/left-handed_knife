@@ -1,7 +1,7 @@
 ---
 layout: post
 title: Linux共享库的组织
-categories: Linux系统编程
+categories: Linux内核架构与系统编程
 description: Linux共享库的组织
 keywords: Linux, shared library, link
 ---
