@@ -72,7 +72,158 @@ with open("large_file.bin", "rb") as f:
 
 ### 1.3与C++交互中的零拷贝应用
 
+在python与C++交互过程中，通常会用到pybind11绑定C++接口，然后在python侧进行调用。
+
+#### 1.3.1 从python到C++的零拷贝
+
+C++侧使用python传过来的py::buffer.request获取py::buffer_info，底层的指针和长度
+
+```C++
+std::string echo(py::buffer buf) {  
+    py::buffer_info info = buf.request();  
+    const char* data = static_cast<const char*>(info.ptr);  
+    return data;
+}
+
+PYBIND11_MODULE(zero_copy, m) {  m.def("echo", &echo);}
+```
+
+python侧调用：
+
+```python
+import zero_copy
+result = zero_copy.echo(b"hello")
+print("echo result", result) # output: echo result hello
+```
+
+如果在C++侧需要修改python传过来的参数内容，需要在python侧传入`bytearray`，然后C++侧修改内容：
+
+```c++
+std::string echo(py::buffer buf) {  
+    py::buffer_info info = buf.request(true);  
+    char* data = static_cast<char*>(info.ptr);  
+    if (info.size > 0) {    
+        data[0] = 'Z';  // modify buf    
+        data[1] = 'Y';  
+    }  
+    return data;
+}
+```
+
+```python
+result = zero_copy.echo(bytearray(b"hello"))
+print("echo result", result)#output: echo result ZYllo
+```
+
+#### 1.3.2 从C++到python的零拷贝
+
+上述的例子中我们成功的实现了从python传递到c++的零拷贝，接下来看看如何实现从C++到python的零拷贝。这里用到了py::memview 的from_buffer或者from_memory方法，这两个方法提供了不归python管理的、C++侧的内存视图。
+
+```c++
+class caller { 
+public:  
+    caller(py::function func) : callback_(func) {}  
+    void hello(py::buffer buf) {    
+        py::buffer_info info = buf.request(true);    
+        char* data = static_cast<char*>(info.ptr);    
+        if (info.size > 0) {      
+            data[0] = 'Z';  // modify buf      
+            data[1] = 'Y';    
+        }    
+        str_ = "string from c++";    
+        auto view = py::memoryview::from_buffer(str_.data(), {str_.size()}, {sizeof(uint8_t)});    
+        py::gil_scoped_acquire acquire;    
+        callback_(view);  
+    } 
+private:
+    py::function callback_;  
+    std::string str_;
+};
+PYBIND11_MODULE(zero_copy, m) {  
+    py::class_<caller>(m, "caller")      
+        .def(py::init<py::function>())      
+        .def("hello", &caller::hello);
+}
+```
+
+python侧调用：
+
+```python
+import zero_copy
+def callback(mv):    
+    print(mv.tobytes()) #will print: string from c++
+c = zero_copy.caller(callback)
+c.hello(bytearray(b"hello"))
+```
+
+除了上述方法，还可以使用智能指针来让python管理字符串生命周期：
+
+```c++
+#include <pybind11/pybind11.h>
+#include <string>
+#include <memory>
+
+namespace py = pybind11;
+class string_holder { 
+public:  
+    string_holder(std::string val) : value(std::move(val)) {}  
+    py::object str_view() {    
+        auto view = py::memoryview::from_buffer(value.data(), {value.size()},{sizeof(uint8_t)});    
+        return view;  
+    } 
+private:  
+    std::string value;
+};
+class caller { 
+public:  
+    caller(py::function func) : callback_(func) {}  
+    std::shared_ptr<string_holder> hello(py::buffer buf) {    
+        py::buffer_info info = buf.request(true);    
+        char* data = static_cast<char*>(info.ptr);    
+        if (info.size > 0) {      
+            data[0] = 'Z';  // modify buf      
+            data[1] = 'Y';    
+        }    
+        // auto view = py::memoryview::from_buffer(str_.data(), {str_.size()}, {sizeof(uint8_t)});
+        callback_(data);
+        auto holder = std::make_shared<string_holder>("string from c++");    
+        return holder;  
+    } private:  
+
+    py::function callback_;  
+    std::string str_;
+};
+
+PYBIND11_MODULE(zero_copy, m) {  
+    py::class_<string_holder, std::shared_ptr<string_holder>>(m, "Holder")      
+        .def(py::init<std::string>())      
+        .def("str_view", &string_holder::str_view);  
+    py::class_<caller>(m, "caller")      
+        .def(py::init<py::function>())      
+        .def("hello", &caller::hello);
+}
+```
+
+python侧调用：
+
+```python
+import zero_copy
+def callback(mv):    
+    print(mv) #will print: ZYllo
+c = zero_copy.caller(callback)
+r = c.hello(bytearray(b"hello"))
+print(r.str_view().tobytes()) #will print: string from c++
+```
+
+
+
+## 2.优化gil锁
+
 [TODO]
+
+
+
+
 
 # Python调试
 
@@ -117,7 +268,7 @@ if __name__ == "__main__":
 
 输出：
 
-![cpp_0018](/images/posts/python/python_0001.png)
+![python_0001](/images/posts/python/python_0001.png)
 
 每一条记录都有size和count指标，用来表示这行代码分配对象占用了多少内存以及这些对象的数量，通过这两项指标我们可以很快发现占用内存比较多的对象是由那几行代码分配的。
 
@@ -140,7 +291,7 @@ if __name__ == "__main__":
 
 输出：
 
-![cpp_0018](/images/posts/python/python_0002.png)
+![python_0002](/images/posts/python/python_0002.png)
 
 这样的栈追踪信息很有用，可以帮助我们找到程序中累计分配内存最多的类和函数。
 
