@@ -219,7 +219,7 @@ print(r.str_view().tobytes()) #will print: string from c++
 
 ## 2.优化gil锁
 
-[TODO]
+篇幅过长，单独写一篇
 
 
 
