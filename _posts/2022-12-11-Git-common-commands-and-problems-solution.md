@@ -41,6 +41,43 @@ ssh-keygen -t rsa
 
 然后连续三次回车即可在固定位置生成`id_rsa.pub`的文件。
 
+##### 自动补全配置
+
+1. 获取 Git 补全脚本
+
+Git 官方提供了补全脚本，通常随 Git 一起安装。如果没有，可以从 Git 源码仓库下载：
+
+```shell
+# 确保目录存在
+mkdir -p ~/.git-completion
+
+# 下载补全脚本
+curl https://raw.githubusercontent.com/git/git/master/contrib/completion/git-completion.bash -o ~/.git-completion/git-completion.bash
+
+# 本地有保存可以直接拷贝到~/.git-completion/git-completion.bash
+```
+
+2. 配置自动加载
+
+将以下内容添加到 `~/.bashrc` 或 `~/.bash_profile` 中：
+
+```shell
+# Git 自动补全配置
+if [ -f ~/.git-completion/git-completion.bash ]; then
+    . ~/.git-completion/git-completion.bash
+fi
+```
+
+3. 使配置生效
+
+```shell
+source ~/.bashrc
+# 或
+source ~/.bash_profile
+```
+
+
+
 #### Tag相关
 
 
