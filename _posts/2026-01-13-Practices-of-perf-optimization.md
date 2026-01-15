@@ -17,7 +17,7 @@ keywords: 性能优化, 高性能计算
 
 有时间会把 [abseil / Performance Hints](https://abseil.io/fast/hints.html) 全文翻译总结一下。以下是转载的截图
 
-## 转载正文
+## 1.转载正文
 
 ![perf_0001](/images/posts/high_performance_optimization/perf_0001.jpg)
 
@@ -49,7 +49,7 @@ keywords: 性能优化, 高性能计算
 
 ![perf_0015](/images/posts/high_performance_optimization/perf_0015.jpg)
 
-## 7.参考
+## 2.参考
 
 - https://mp.weixin.qq.com/s/jXxNP_TeU5YhTESsMnoMJg
 - [abseil / Performance Hints](https://abseil.io/fast/hints.html)
