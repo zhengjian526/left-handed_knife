@@ -1,9 +1,9 @@
 ---
 layout: post
 title: SIMD探索学习--Intel的SSE和AVX指令集
-categories: AI高性能计算
+categories: 高性能计算
 description: SIMD探索学习--Intel的SSE和AVX指令集
-keywords: SIMD, AI高性能计算, SSE, AVX
+keywords: SIMD, 高性能计算, SSE, AVX
 ---
 
 # SIMD简介

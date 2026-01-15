@@ -1,9 +1,9 @@
 ---
 layout: post
-title: AI高性能计算--OpenMP
-categories: AI高性能计算
-description: AI高性能计算--OpenMP
-keywords: AI高性能计算, OpenMP
+title: 高性能计算--OpenMP
+categories: 高性能计算
+description: 高性能计算--OpenMP
+keywords: 高性能计算, OpenMP
 ---
 
 # OpenMP
