@@ -1,9 +1,9 @@
 ---
 layout: post
 title: 【转载】vLLM 核心技术 PagedAttention 原理详解
-categories: 大模型
+categories: LLM
 description: vLLM 核心技术 PagedAttention 原理详解
-keywords: 大模型
+keywords: LLM
 ---
 
 # 【转载】vLLM 核心技术 PagedAttention 原理详解

@@ -1,9 +1,9 @@
 ---
 layout: post
 title: Transformer核心架构解析
-categories: 大模型
+categories: LLM
 description: Transformer核心架构解析
-keywords: 大模型
+keywords: LLM
 ---
 
 # Transformer核心架构解析

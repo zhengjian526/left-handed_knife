@@ -6,7 +6,7 @@ description: vLLM源码走读
 keywords: vLLM
 ---
 
-# vLLM源码走读(一) vLLM整体架构
+# vLLM源码走读(一) vLLM整体架构流程
 
 ![llm_0019](/images/posts/LLM/llm_0019.png)
 
@@ -40,7 +40,7 @@ for output in outputs:
     print(f"Prompt: {prompt!r}, Generated text: {generated_text!r}")
 ```
 
-## 1.LLM引擎
+## 1.整体框架
 
 [`LLMEngine`](https://docs.vllm.com.cn/en/latest/api/vllm/v1/engine/llm_engine/#vllm.v1.engine.llm_engine.LLMEngine) 和 `AsyncLLMEngine` 类是 vLLM 系统运行的核心，处理模型推理和异步请求处理。
 
